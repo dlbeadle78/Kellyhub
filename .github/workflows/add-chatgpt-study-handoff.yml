@@ -1,5 +1,5 @@
 name: Add ChatGPT Study handoff
-# Trigger the one-time updater after the workflow exists on main.
+# One-time updater for learning-section Study Mode handoffs.
 
 on:
   push:
@@ -90,16 +90,7 @@ jobs:
                   raise SystemExit('Could not find statusClass insertion point')
               jsx = jsx.replace(helper_marker, helper_marker + helper_block, 1)
 
-          next_topic_marker = r'''  function nextTopic() {
-            if (!topic || !unit) return
-            const flat = units.flatMap(unitItem => unitItem.topics.map(topicItem => ({ topic: topicItem, unit: unitItem })))
-            const index = flat.findIndex(item => item.topic.slug === topic.slug && item.unit.slug === unit.slug)
-            const next = flat[index + 1]; if (next) openTopic(next.topic, next.unit)
-          }
-          '''
-          handoff_function = r'''
-
-          function openChatGPTStudy(section) {
+          handoff_function = r'''  function openChatGPTStudy(section) {
             const subjectName = subjects.find(item => item.slug === subjectSlug)?.short_name || SUBJECT_META[subjectSlug]?.label || subjectSlug
             const prompt = buildStudyPrompt({
               subjectName,
@@ -122,11 +113,13 @@ jobs:
             if (navigator.clipboard?.writeText) navigator.clipboard.writeText(prompt).then(copied).catch(copyFailed)
             else copyFailed()
           }
-          '''
+
+'''
           if 'function openChatGPTStudy(section)' not in jsx:
-              if next_topic_marker not in jsx:
-                  raise SystemExit('Could not find nextTopic insertion point')
-              jsx = jsx.replace(next_topic_marker, next_topic_marker + handoff_function, 1)
+              insertion_marker = '  if (!content || !unit || !topic) return <div className="empty">Learning content is loading.</div>'
+              if insertion_marker not in jsx:
+                  raise SystemExit('Could not find learning loading insertion point')
+              jsx = jsx.replace(insertion_marker, handoff_function + insertion_marker, 1)
 
           old_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div><h4>{section.title}</h4><p>{section.body}</p></div></article>)}</div>'''
           new_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div className="learning-textbook-copy"><h4>{section.title}</h4><p>{section.body}</p><button type="button" className="learning-study-handoff" onClick={() => openChatGPTStudy(section)} title={`Copy a Study Mode prompt for ${section.title} and open ChatGPT`}><GraduationCap size={16}/> Study this in ChatGPT <ExternalLink size={14}/></button></div></article>)}</div>'''
