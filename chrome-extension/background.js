@@ -1,11 +1,11 @@
-const HUB='https://kellyhub.vercel.app/#/capture'
+const HUB='https://kellyhub.vercel.app/'
 function captureUrl(info,tab){
   const params=new URLSearchParams()
   if(tab?.title)params.set('title',tab.title)
   if(info?.selectionText)params.set('text',info.selectionText)
   if(info?.linkUrl)params.set('url',info.linkUrl)
   else if(tab?.url)params.set('url',tab.url)
-  return `${HUB}?${params.toString()}`
+  return `${HUB}?${params.toString()}#/capture`
 }
 chrome.runtime.onInstalled.addListener(()=>{
   chrome.contextMenus.create({id:'kellyn-page',title:'Kellyn Hub → Add this page',contexts:['page']})
