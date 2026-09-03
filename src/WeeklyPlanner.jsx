@@ -4,8 +4,8 @@ import { supabase } from './supabase.js'
 import './WeeklyPlanner.css'
 
 const DAY_NAMES = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
-const START_HOUR = 6
-const END_HOUR = 23
+const START_HOUR = 0
+const END_HOUR = 24
 const DAY_MINUTES = (END_HOUR - START_HOUR) * 60
 
 const CATEGORY_LABELS = {
