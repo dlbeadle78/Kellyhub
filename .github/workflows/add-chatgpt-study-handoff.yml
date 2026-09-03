@@ -1,5 +1,4 @@
 name: Add ChatGPT Study handoff
-# One-time updater for learning-section Study Mode handoffs.
 
 on:
   push:
@@ -19,126 +18,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-      - name: Add Study handoff to learning cards
-        shell: python
-        run: |
-          from pathlib import Path
-
-          jsx_path = Path('src/LearningSubjects.jsx')
-          jsx = jsx_path.read_text()
-
-          old_import = "import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'"
-          new_import = "import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, GraduationCap, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'"
-          if old_import in jsx:
-              jsx = jsx.replace(old_import, new_import, 1)
-
-          helper_marker = "function statusClass(status) { return `learning-status learning-status-${status || 'not_started'}` }\n"
-          helper_block = r'''
-
-          const CHATGPT_STUDY_URL = 'https://chatgpt.com/studymode'
-
-          function buildStudyPrompt({ subjectName, subjectSlug, unitTitle, topicTitle, section, spec }) {
-            const qualification = subjectSlug === 'welsh-bacc'
-              ? 'WJEC Level 3 Advanced Skills Baccalaureate Wales'
-              : `WJEC A Level ${subjectName}`
-            const progression = subjectSlug === 'welsh-bacc'
-              ? 'Build towards Level 3 depth, independent thinking, research and the skills needed for the relevant assessment task.'
-              : 'Build towards A-level depth, relevant named thinkers, cases or evidence, links to other ideas, evaluation and exam/application skills.'
-
-            return [
-              '@Study',
-              '',
-              `Teach me this section at ${qualification} standard.`,
-              `Subject: ${subjectName}`,
-              `Unit: ${unitTitle}`,
-              `Main topic: ${topicTitle}`,
-              `Section to study: ${section.title}`,
-              '',
-              'Kellyn Hub starting explanation:',
-              section.body,
-              spec ? `WJEC specification focus: ${spec}` : '',
-              '',
-              'Teach me rather than just giving me notes or a finished answer.',
-              'Start by asking me one short question to find out what I already know.',
-              'Explain the idea in small, dyslexia-friendly chunks using clear language and relevant examples.',
-              'Ask only one question at a time and wait for my answer before continuing.',
-              progression,
-              'Correct misunderstandings as we go and finish with a short retrieval check so I can show what I have learned.',
-              'Do not write assessed work for me or provide a submission-ready answer.'
-            ].filter(Boolean).join('\n')
-          }
-
-          function fallbackCopy(value) {
-            try {
-              const area = document.createElement('textarea')
-              area.value = value
-              area.setAttribute('readonly', '')
-              area.style.position = 'fixed'
-              area.style.opacity = '0'
-              document.body.appendChild(area)
-              area.select()
-              const copied = document.execCommand('copy')
-              area.remove()
-              return copied
-            } catch (_) {
-              return false
-            }
-          }
-          '''
-          if 'const CHATGPT_STUDY_URL' not in jsx:
-              if helper_marker not in jsx:
-                  raise SystemExit('Could not find statusClass insertion point')
-              jsx = jsx.replace(helper_marker, helper_marker + helper_block, 1)
-
-          handoff_function = r'''  function openChatGPTStudy(section) {
-            const subjectName = subjects.find(item => item.slug === subjectSlug)?.short_name || SUBJECT_META[subjectSlug]?.label || subjectSlug
-            const prompt = buildStudyPrompt({
-              subjectName,
-              subjectSlug,
-              unitTitle: unit?.title || '',
-              topicTitle: topic?.title || '',
-              section,
-              spec: depth?.spec || ''
-            })
-
-            window.open(CHATGPT_STUDY_URL, '_blank', 'noopener,noreferrer')
-
-            const copied = () => notify?.(`Study prompt copied for ${section.title}. Paste it into ChatGPT Study Mode and send.`)
-            const copyFailed = () => {
-              if (fallbackCopy(prompt)) return copied()
-              window.prompt('Copy this Study Mode prompt, then paste it into ChatGPT:', prompt)
-              notify?.('ChatGPT Study Mode opened. Copy the prompt shown and paste it into ChatGPT.')
-            }
-
-            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(prompt).then(copied).catch(copyFailed)
-            else copyFailed()
-          }
-
-'''
-          if 'function openChatGPTStudy(section)' not in jsx:
-              insertion_marker = '  if (!content || !unit || !topic) return <div className="empty">Learning content is loading.</div>'
-              if insertion_marker not in jsx:
-                  raise SystemExit('Could not find learning loading insertion point')
-              jsx = jsx.replace(insertion_marker, handoff_function + insertion_marker, 1)
-
-          old_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div><h4>{section.title}</h4><p>{section.body}</p></div></article>)}</div>'''
-          new_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div className="learning-textbook-copy"><h4>{section.title}</h4><p>{section.body}</p><button type="button" className="learning-study-handoff" onClick={() => openChatGPTStudy(section)} title={`Copy a Study Mode prompt for ${section.title} and open ChatGPT`}><GraduationCap size={16}/> Study this in ChatGPT <ExternalLink size={14}/></button></div></article>)}</div>'''
-          if 'className="learning-study-handoff"' not in jsx:
-              if old_sections not in jsx:
-                  raise SystemExit('Could not find textbook section renderer')
-              jsx = jsx.replace(old_sections, new_sections, 1)
-
-          jsx_path.write_text(jsx)
-
-          css_path = Path('src/learning-depth.css')
-          css = css_path.read_text()
-          css_rules = """
-          .learning-textbook-copy{min-width:0}.learning-study-handoff{margin-top:14px;border:1px solid color-mix(in srgb,var(--purple) 35%,var(--border));background:var(--purple-2);color:var(--purple);border-radius:10px;padding:9px 12px;display:inline-flex;align-items:center;gap:7px;font-size:.78rem;font-weight:800;cursor:pointer;line-height:1.2}.learning-study-handoff:hover{border-color:var(--purple);background:color-mix(in srgb,var(--purple-2) 82%,var(--panel));transform:translateY(-1px)}.learning-study-handoff:focus-visible{outline:3px solid color-mix(in srgb,var(--purple) 28%,transparent);outline-offset:2px}.learning-study-handoff svg{flex:0 0 auto}
-          @media(max-width:650px){.learning-study-handoff{width:100%;justify-content:center;padding:11px 12px;margin-top:15px}}
-          """.strip()
-          if '.learning-study-handoff{' not in css:
-              css = css.rstrip() + '\n\n' + css_rules + '\n'
-              css_path.write_text(css)
+      - name: Patch learning section handoffs
+        env:
+          PATCH_SCRIPT_B64: "ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpqc3hfcGF0aCA9IFBhdGgoInNyYy9MZWFybmluZ1N1YmplY3RzLmpzeCIpCmpzeCA9IGpzeF9wYXRoLnJlYWRfdGV4dCgpCgpvbGRfaW1wb3J0ID0gImltcG9ydCB7IEJvb2tPcGVuLCBDaGVja0NpcmNsZTIsIENoZXZyb25SaWdodCwgRXh0ZXJuYWxMaW5rLCBGaWxlVGV4dCwgSGVhZHBob25lcywgTGlnaHRidWxiLCBSb3RhdGVDY3csIFNjYWxlLCBUYXJnZXQgfSBmcm9tICdsdWNpZGUtcmVhY3QnIgpuZXdfaW1wb3J0ID0gImltcG9ydCB7IEJvb2tPcGVuLCBDaGVja0NpcmNsZTIsIENoZXZyb25SaWdodCwgRXh0ZXJuYWxMaW5rLCBGaWxlVGV4dCwgR3JhZHVhdGlvbkNhcCwgSGVhZHBob25lcywgTGlnaHRidWxiLCBSb3RhdGVDY3csIFNjYWxlLCBUYXJnZXQgfSBmcm9tICdsdWNpZGUtcmVhY3QnIgppZiBvbGRfaW1wb3J0IGluIGpzeDoKICAgIGpzeCA9IGpzeC5yZXBsYWNlKG9sZF9pbXBvcnQsIG5ld19pbXBvcnQsIDEpCgpoZWxwZXJfbWFya2VyID0gImZ1bmN0aW9uIHN0YXR1c0NsYXNzKHN0YXR1cykgeyByZXR1cm4gYGxlYXJuaW5nLXN0YXR1cyBsZWFybmluZy1zdGF0dXMtJHtzdGF0dXMgfHwgJ25vdF9zdGFydGVkJ31gIH1cbiIKaGVscGVyX2Jsb2NrID0gcicnJwpjb25zdCBDSEFUR1BUX1NUVURZX1VSTCA9ICdodHRwczovL2NoYXRncHQuY29tL3N0dWR5bW9kZScKCmZ1bmN0aW9uIGJ1aWxkU3R1ZHlQcm9tcHQoeyBzdWJqZWN0TmFtZSwgc3ViamVjdFNsdWcsIHVuaXRUaXRsZSwgdG9waWNUaXRsZSwgc2VjdGlvbiwgc3BlYyB9KSB7CiAgY29uc3QgcXVhbGlmaWNhdGlvbiA9IHN1YmplY3RTbHVnID09PSAnd2Vsc2gtYmFjYycKICAgID8gJ1dKRUMgTGV2ZWwgMyBBZHZhbmNlZCBTa2lsbHMgQmFjY2FsYXVyZWF0ZSBXYWxlcycKICAgIDogYFdKRUMgQSBMZXZlbCAke3N1YmplY3ROYW1lfWAKICBjb25zdCBwcm9ncmVzc2lvbiA9IHN1YmplY3RTbHVnID09PSAnd2Vsc2gtYmFjYycKICAgID8gJ0J1aWxkIHRvd2FyZHMgTGV2ZWwgMyBkZXB0aCwgaW5kZXBlbmRlbnQgdGhpbmtpbmcsIHJlc2VhcmNoIGFuZCB0aGUgc2tpbGxzIG5lZWRlZCBmb3IgdGhlIHJlbGV2YW50IGFzc2Vzc21lbnQgdGFzay4nCiAgICA6ICdCdWlsZCB0b3dhcmRzIEEtbGV2ZWwgZGVwdGgsIHJlbGV2YW50IG5hbWVkIHRoaW5rZXJzLCBjYXNlcyBvciBldmlkZW5jZSwgbGlua3MgdG8gb3RoZXIgaWRlYXMsIGV2YWx1YXRpb24gYW5kIGV4YW0vYXBwbGljYXRpb24gc2tpbGxzLicKCiAgcmV0dXJuIFsKICAgICdAU3R1ZHknLAogICAgJycsCiAgICBgVGVhY2ggbWUgdGhpcyBzZWN0aW9uIGF0ICR7cXVhbGlmaWNhdGlvbn0gc3RhbmRhcmQuYCwKICAgIGBTdWJqZWN0OiAke3N1YmplY3ROYW1lfWAsCiAgICBgVW5pdDogJHt1bml0VGl0bGV9YCwKICAgIGBNYWluIHRvcGljOiAke3RvcGljVGl0bGV9YCwKICAgIGBTZWN0aW9uIHRvIHN0dWR5OiAke3NlY3Rpb24udGl0bGV9YCwKICAgICcnLAogICAgJ0tlbGx5biBIdWIgc3RhcnRpbmcgZXhwbGFuYXRpb246JywKICAgIHNlY3Rpb24uYm9keSwKICAgIHNwZWMgPyBgV0pFQyBzcGVjaWZpY2F0aW9uIGZvY3VzOiAke3NwZWN9YCA6ICcnLAogICAgJycsCiAgICAnVGVhY2ggbWUgcmF0aGVyIHRoYW4ganVzdCBnaXZpbmcgbWUgbm90ZXMgb3IgYSBmaW5pc2hlZCBhbnN3ZXIuJywKICAgICdTdGFydCBieSBhc2tpbmcgbWUgb25lIHNob3J0IHF1ZXN0aW9uIHRvIGZpbmQgb3V0IHdoYXQgSSBhbHJlYWR5IGtub3cuJywKICAgICdFeHBsYWluIHRoZSBpZGVhIGluIHNtYWxsLCBkeXNsZXhpYS1mcmllbmRseSBjaHVua3MgdXNpbmcgY2xlYXIgbGFuZ3VhZ2UgYW5kIHJlbGV2YW50IGV4YW1wbGVzLicsCiAgICAnQXNrIG9ubHkgb25lIHF1ZXN0aW9uIGF0IGEgdGltZSBhbmQgd2FpdCBmb3IgbXkgYW5zd2VyIGJlZm9yZSBjb250aW51aW5nLicsCiAgICBwcm9ncmVzc2lvbiwKICAgICdDb3JyZWN0IG1pc3VuZGVyc3RhbmRpbmdzIGFzIHdlIGdvIGFuZCBmaW5pc2ggd2l0aCBhIHNob3J0IHJldHJpZXZhbCBjaGVjayBzbyBJIGNhbiBzaG93IHdoYXQgSSBoYXZlIGxlYXJuZWQuJywKICAgICdEbyBub3Qgd3JpdGUgYXNzZXNzZWQgd29yayBmb3IgbWUgb3IgcHJvdmlkZSBhIHN1Ym1pc3Npb24tcmVhZHkgYW5zd2VyLicKICBdLmZpbHRlcihCb29sZWFuKS5qb2luKCdcXG4nKQp9CgpmdW5jdGlvbiBmYWxsYmFja0NvcHkodmFsdWUpIHsKICB0cnkgewogICAgY29uc3QgYXJlYSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoJ3RleHRhcmVhJykKICAgIGFyZWEudmFsdWUgPSB2YWx1ZQogICAgYXJlYS5zZXRBdHRyaWJ1dGUoJ3JlYWRvbmx5JywgJycpCiAgICBhcmVhLnN0eWxlLnBvc2l0aW9uID0gJ2ZpeGVkJwogICAgYXJlYS5zdHlsZS5vcGFjaXR5ID0gJzAnCiAgICBkb2N1bWVudC5ib2R5LmFwcGVuZENoaWxkKGFyZWEpCiAgICBhcmVhLnNlbGVjdCgpCiAgICBjb25zdCBjb3BpZWQgPSBkb2N1bWVudC5leGVjQ29tbWFuZCgnY29weScpCiAgICBhcmVhLnJlbW92ZSgpCiAgICByZXR1cm4gY29waWVkCiAgfSBjYXRjaCAoXykgewogICAgcmV0dXJuIGZhbHNlCiAgfQp9CicnJwppZiAnY29uc3QgQ0hBVEdQVF9TVFVEWV9VUkwnIG5vdCBpbiBqc3g6CiAgICBpZiBoZWxwZXJfbWFya2VyIG5vdCBpbiBqc3g6CiAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgnQ291bGQgbm90IGZpbmQgc3RhdHVzQ2xhc3MgaW5zZXJ0aW9uIHBvaW50JykKICAgIGpzeCA9IGpzeC5yZXBsYWNlKGhlbHBlcl9tYXJrZXIsIGhlbHBlcl9tYXJrZXIgKyBoZWxwZXJfYmxvY2ssIDEpCgpoYW5kb2ZmX2Z1bmN0aW9uID0gcicnJyAgZnVuY3Rpb24gb3BlbkNoYXRHUFRTdHVkeShzZWN0aW9uKSB7CiAgICBjb25zdCBzdWJqZWN0TmFtZSA9IHN1YmplY3RzLmZpbmQoaXRlbSA9PiBpdGVtLnNsdWcgPT09IHN1YmplY3RTbHVnKT8uc2hvcnRfbmFtZSB8fCBTVUJKRUNUX01FVEFbc3ViamVjdFNsdWddPy5sYWJlbCB8fCBzdWJqZWN0U2x1ZwogICAgY29uc3QgcHJvbXB0ID0gYnVpbGRTdHVkeVByb21wdCh7CiAgICAgIHN1YmplY3ROYW1lLAogICAgICBzdWJqZWN0U2x1ZywKICAgICAgdW5pdFRpdGxlOiB1bml0Py50aXRsZSB8fCAnJywKICAgICAgdG9waWNUaXRsZTogdG9waWM/LnRpdGxlIHx8ICcnLAogICAgICBzZWN0aW9uLAogICAgICBzcGVjOiBkZXB0aD8uc3BlYyB8fCAnJwogICAgfSkKCiAgICB3aW5kb3cub3BlbihDSEFUR1BUX1NUVURZX1VSTCwgJ19ibGFuaycsICdub29wZW5lcixub3JlZmVycmVyJykKCiAgICBjb25zdCBjb3BpZWQgPSAoKSA9PiBub3RpZnk/LihgU3R1ZHkgcHJvbXB0IGNvcGllZCBmb3IgJHtzZWN0aW9uLnRpdGxlfS4gUGFzdGUgaXQgaW50byBDaGF0R1BUIFN0dWR5IE1vZGUgYW5kIHNlbmQuYCkKICAgIGNvbnN0IGNvcHlGYWlsZWQgPSAoKSA9PiB7CiAgICAgIGlmIChmYWxsYmFja0NvcHkocHJvbXB0KSkgcmV0dXJuIGNvcGllZCgpCiAgICAgIHdpbmRvdy5wcm9tcHQoJ0NvcHkgdGhpcyBTdHVkeSBNb2RlIHByb21wdCwgdGhlbiBwYXN0ZSBpdCBpbnRvIENoYXRHUFQ6JywgcHJvbXB0KQogICAgICBub3RpZnk/LignQ2hhdEdQVCBTdHVkeSBNb2RlIG9wZW5lZC4gQ29weSB0aGUgcHJvbXB0IHNob3duIGFuZCBwYXN0ZSBpdCBpbnRvIENoYXRHUFQuJykKICAgIH0KCiAgICBpZiAobmF2aWdhdG9yLmNsaXBib2FyZD8ud3JpdGVUZXh0KSBuYXZpZ2F0b3IuY2xpcGJvYXJkLndyaXRlVGV4dChwcm9tcHQpLnRoZW4oY29waWVkKS5jYXRjaChjb3B5RmFpbGVkKQogICAgZWxzZSBjb3B5RmFpbGVkKCkKICB9CgonJycKaWYgJ2Z1bmN0aW9uIG9wZW5DaGF0R1BUU3R1ZHkoc2VjdGlvbiknIG5vdCBpbiBqc3g6CiAgICBpbnNlcnRpb25fbWFya2VyID0gJyAgaWYgKCFjb250ZW50IHx8ICF1bml0IHx8ICF0b3BpYykgcmV0dXJuIDxkaXYgY2xhc3NOYW1lPSJlbXB0eSI+TGVhcm5pbmcgY29udGVudCBpcyBsb2FkaW5nLjwvZGl2PicKICAgIGlmIGluc2VydGlvbl9tYXJrZXIgbm90IGluIGpzeDoKICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCdDb3VsZCBub3QgZmluZCBsZWFybmluZyBsb2FkaW5nIGluc2VydGlvbiBwb2ludCcpCiAgICBqc3ggPSBqc3gucmVwbGFjZShpbnNlcnRpb25fbWFya2VyLCBoYW5kb2ZmX2Z1bmN0aW9uICsgaW5zZXJ0aW9uX21hcmtlciwgMSkKCm9sZF9zZWN0aW9ucyA9ICcgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibGVhcm5pbmctdGV4dGJvb2stc2VjdGlvbnMiPnsodGV4dGJvb2suc2VjdGlvbnMgfHwgW10pLm1hcCgoc2VjdGlvbiwgaW5kZXgpID0+IDxhcnRpY2xlIGtleT17YCR7c2VjdGlvbi50aXRsZX0tJHtpbmRleH1gfT48ZGl2IGNsYXNzTmFtZT0ibGVhcm5pbmctdGV4dGJvb2stbnVtYmVyIj57aW5kZXggKyAxfTwvZGl2PjxkaXY+PGg0PntzZWN0aW9uLnRpdGxlfTwvaDQ+PHA+e3NlY3Rpb24uYm9keX08L3A+PC9kaXY+PC9hcnRpY2xlPil9PC9kaXY+JwpuZXdfc2VjdGlvbnMgPSAnICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImxlYXJuaW5nLXRleHRib29rLXNlY3Rpb25zIj57KHRleHRib29rLnNlY3Rpb25zIHx8IFtdKS5tYXAoKHNlY3Rpb24sIGluZGV4KSA9PiA8YXJ0aWNsZSBrZXk9e2Ake3NlY3Rpb24udGl0bGV9LSR7aW5kZXh9YH0+PGRpdiBjbGFzc05hbWU9ImxlYXJuaW5nLXRleHRib29rLW51bWJlciI+e2luZGV4ICsgMX08L2Rpdj48ZGl2IGNsYXNzTmFtZT0ibGVhcm5pbmctdGV4dGJvb2stY29weSI+PGg0PntzZWN0aW9uLnRpdGxlfTwvaDQ+PHA+e3NlY3Rpb24uYm9keX08L3A+PGJ1dHRvbiB0eXBlPSJidXR0b24iIGNsYXNzTmFtZT0ibGVhcm5pbmctc3R1ZHktaGFuZG9mZiIgb25DbGljaz17KCkgPT4gb3BlbkNoYXRHUFRTdHVkeShzZWN0aW9uKX0gdGl0bGU9e2BDb3B5IGEgU3R1ZHkgTW9kZSBwcm9tcHQgZm9yICR7c2VjdGlvbi50aXRsZX0gYW5kIG9wZW4gQ2hhdEdQVGB9PjxHcmFkdWF0aW9uQ2FwIHNpemU9ezE2fS8+IFN0dWR5IHRoaXMgaW4gQ2hhdEdQVCA8RXh0ZXJuYWxMaW5rIHNpemU9ezE0fS8+PC9idXR0b24+PC9kaXY+PC9hcnRpY2xlPil9PC9kaXY+JwppZiAnY2xhc3NOYW1lPSJsZWFybmluZy1zdHVkeS1oYW5kb2ZmIicgbm90IGluIGpzeDoKICAgIGlmIG9sZF9zZWN0aW9ucyBub3QgaW4ganN4OgogICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoJ0NvdWxkIG5vdCBmaW5kIHRleHRib29rIHNlY3Rpb24gcmVuZGVyZXInKQogICAganN4ID0ganN4LnJlcGxhY2Uob2xkX3NlY3Rpb25zLCBuZXdfc2VjdGlvbnMsIDEpCgpqc3hfcGF0aC53cml0ZV90ZXh0KGpzeCkKCmNzc19wYXRoID0gUGF0aCgic3JjL2xlYXJuaW5nLWRlcHRoLmNzcyIpCmNzcyA9IGNzc19wYXRoLnJlYWRfdGV4dCgpCmNzc19ydWxlcyA9ICcnJy5sZWFybmluZy10ZXh0Ym9vay1jb3B5e21pbi13aWR0aDowfS5sZWFybmluZy1zdHVkeS1oYW5kb2Zme21hcmdpbi10b3A6MTRweDtib3JkZXI6MXB4IHNvbGlkIGNvbG9yLW1peChpbiBzcmdiLHZhcigtLXB1cnBsZSkgMzUlLHZhcigtLWJvcmRlcikpO2JhY2tncm91bmQ6dmFyKC0tcHVycGxlLTIpO2NvbG9yOnZhcigtLXB1cnBsZSk7Ym9yZGVyLXJhZGl1czoxMHB4O3BhZGRpbmc6OXB4IDEycHg7ZGlzcGxheTppbmxpbmUtZmxleDthbGlnbi1pdGVtczpjZW50ZXI7Z2FwOjdweDtmb250LXNpemU6Ljc4cmVtO2ZvbnQtd2VpZ2h0OjgwMDtjdXJzb3I6cG9pbnRlcjtsaW5lLWhlaWdodDoxLjJ9LmxlYXJuaW5nLXN0dWR5LWhhbmRvZmY6aG92ZXJ7Ym9yZGVyLWNvbG9yOnZhcigtLXB1cnBsZSk7YmFja2dyb3VuZDpjb2xvci1taXgoaW4gc3JnYix2YXIoLS1wdXJwbGUtMikgODIlLHZhcigtLXBhbmVsKSk7dHJhbnNmb3JtOnRyYW5zbGF0ZVkoLTFweCl9LmxlYXJuaW5nLXN0dWR5LWhhbmRvZmY6Zm9jdXMtdmlzaWJsZXtvdXRsaW5lOjNweCBzb2xpZCBjb2xvci1taXgoaW4gc3JnYix2YXIoLS1wdXJwbGUpIDI4JSx0cmFuc3BhcmVudCk7b3V0bGluZS1vZmZzZXQ6MnB4fS5sZWFybmluZy1zdHVkeS1oYW5kb2ZmIHN2Z3tmbGV4OjAgMCBhdXRvfQpAbWVkaWEobWF4LXdpZHRoOjY1MHB4KXsubGVhcm5pbmctc3R1ZHktaGFuZG9mZnt3aWR0aDoxMDAlO2p1c3RpZnktY29udGVudDpjZW50ZXI7cGFkZGluZzoxMXB4IDEycHg7bWFyZ2luLXRvcDoxNXB4fX0nJycKaWYgJy5sZWFybmluZy1zdHVkeS1oYW5kb2Zmeycgbm90IGluIGNzczoKICAgIGNzcyA9IGNzcy5yc3RyaXAoKSArICdcblxuJyArIGNzc19ydWxlcyArICdcbicKICAgIGNzc19wYXRoLndyaXRlX3RleHQoY3NzKQo="
+        run: echo "$PATCH_SCRIPT_B64" | base64 --decode | python3
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
