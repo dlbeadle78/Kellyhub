@@ -70,7 +70,7 @@ function buildStudyPrompt({ subjectName, subjectSlug, unitTitle, topicTitle, sec
     progression,
     'Correct misunderstandings as we go and finish with a short retrieval check so I can show what I have learned.',
     'Do not write assessed work for me or provide a submission-ready answer.'
-  ].filter(Boolean).join('\\n')
+  ].filter(Boolean).join('\n')
 }
 
 function fallbackCopy(value) {
