@@ -1,11 +1,10 @@
-name: Fix ChatGPT Study handoff prompt
+name: Complete ChatGPT Study handoff prompt fix
 
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/add-chatgpt-study-handoff.yml'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,30 +13,17 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: main
-      - name: Fix prompt line breaks
+      - name: Fix copied prompt newlines
         env:
-          PATCH_SCRIPT_B64: "ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnAgPSBQYXRoKCdzcmMvTGVhcm5pbmdTdWJqZWN0cy5qc3gnKQpsaW5lcyA9IHAucmVhZF90ZXh0KCkuc3BsaXRsaW5lcygpCmNoYW5nZWQgPSBGYWxzZQpmb3IgaSwgbGluZSBpbiBlbnVtZXJhdGUobGluZXMpOgogICAgaWYgIl0uZmlsdGVyKEJvb2xlYW4pLmpvaW4oIiBpbiBsaW5lOgogICAgICAgIHRhcmdldCA9ICIgIF0uZmlsdGVyKEJvb2xlYW4pLmpvaW4oJ1xcbicpIgogICAgICAgIGlmIGxpbmUgIT0gdGFyZ2V0OgogICAgICAgICAgICBsaW5lc1tpXSA9IHRhcmdldAogICAgICAgICAgICBjaGFuZ2VkID0gVHJ1ZQppZiBjaGFuZ2VkOgogICAgcC53cml0ZV90ZXh0KCdcbicuam9pbihsaW5lcykgKyAnXG4nKQo="
+          PATCH_SCRIPT_B64: "ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCnAgPSBQYXRoKCJzcmMvTGVhcm5pbmdTdWJqZWN0cy5qc3giKQp0ZXh0ID0gcC5yZWFkX3RleHQoKQpvbGQgPSAiXS5maWx0ZXIoQm9vbGVhbikuam9pbignXFxcXG4nKSIKbmV3ID0gIl0uZmlsdGVyKEJvb2xlYW4pLmpvaW4oJ1xcbicpIgppZiBvbGQgbm90IGluIHRleHQ6CiAgICByYWlzZSBTeXN0ZW1FeGl0KCJFeHBlY3RlZCBlc2NhcGVkIG5ld2xpbmUgcGF0dGVybiBub3QgZm91bmQiKQpwLndyaXRlX3RleHQodGV4dC5yZXBsYWNlKG9sZCwgbmV3LCAxKSkK"
         run: echo "$PATCH_SCRIPT_B64" | base64 --decode | python3
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Install dependencies
-        run: npm install
-      - name: Build production app
-        run: npm run build
       - name: Commit prompt fix
         run: |
           git config user.name "dlbeadle78"
           git config user.email "dlbeadle@icloud.com"
           git add src/LearningSubjects.jsx
-          if git diff --cached --quiet; then
-            echo "No changes required"
-          else
-            git commit -m "Fix ChatGPT Study handoff prompt formatting"
-            git push origin main
-          fi
+          git commit -m "Fix ChatGPT Study handoff prompt formatting"
+          git push origin main
