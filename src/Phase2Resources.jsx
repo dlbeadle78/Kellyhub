@@ -19,7 +19,14 @@ export default function Phase2Resources({session,subjects=[],notify}){
   useEffect(()=>{if(!session?.user?.id)return;supabase.from('notebook_links').select('*').eq('user_id',session.user.id).then(({data,error})=>{if(error)notify?.(error.message);else setLinks(data||[])})},[session?.user?.id])
   const notebook=links.find(l=>l.subject_slug===subjectSlug&&l.active)
   const sections=useMemo(()=>{const q=query.trim().toLowerCase();if(!q)return catalogue?.sections||[];return (catalogue?.sections||[]).map(s=>({...s,items:s.items.filter(i=>`${i.title} ${i.kind} ${i.use}`.toLowerCase().includes(q))})).filter(s=>s.items.length)},[catalogue,query])
-  async function saveNotebook(e){e.preventDefault();if(!url.trim())return;const payload={user_id:session.user.id,subject_slug:subjectSlug,unit_slug:null,title:title.trim()||'Main NotebookLM',url:url.trim(),active:true,updated_at:new Date().toISOString()};const {data,error}=await supabase.from('notebook_links').upsert(payload,{onConflict:'user_id,subject_slug,unit_slug,title'}).select().single();if(error)return notify?.(error.message);setLinks(cur=>[...cur.filter(x=>x.id!==data.id&&!(x.subject_slug===data.subject_slug&&x.title===data.title)),data]);setUrl('');notify?.('NotebookLM link saved.')}
+  async function saveNotebook(e){
+    e.preventDefault();if(!url.trim())return
+    const cleanTitle=title.trim()||'Main NotebookLM';const payload={user_id:session.user.id,subject_slug:subjectSlug,unit_slug:null,title:cleanTitle,url:url.trim(),active:true,updated_at:new Date().toISOString()}
+    const existing=links.find(x=>x.subject_slug===subjectSlug&&x.title===cleanTitle&&!x.unit_slug)
+    const request=existing?supabase.from('notebook_links').update(payload).eq('id',existing.id).select().single():supabase.from('notebook_links').insert(payload).select().single()
+    const {data,error}=await request;if(error)return notify?.(error.message)
+    setLinks(cur=>[...cur.filter(x=>x.id!==data.id),data]);setUrl('');notify?.('NotebookLM link saved.')
+  }
   const subjectLabel=subject?.short_name||catalogue?.label||'Subject'
   return <div className="p2r-shell">
     <section className="p2r-head"><div><span>Phase 2 resources</span><h2>Learn here. Use official sources when needed.</h2><p>WJEC links are now organised as an internal catalogue. NotebookLM is a companion for source-heavy learning, not the main learning screen.</p></div><NotebookTabs/></section>
