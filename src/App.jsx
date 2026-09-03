@@ -12,6 +12,10 @@ import Phase1Work from './Phase1Work.jsx'
 import QuickCaptureV2 from './QuickCaptureV2.jsx'
 import Phase1Today from './Phase1Today.jsx'
 import StuckV2 from './StuckV2.jsx'
+import Phase2Resources from './Phase2Resources.jsx'
+import Phase2Progress from './Phase2Progress.jsx'
+import Phase2Settings from './Phase2Settings.jsx'
+import NotificationManager from './NotificationManager.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -281,13 +285,14 @@ export default function App() {
         {route==='practice' && <PracticePage {...common()} />}
         {route==='ucas' && <UcasPage {...common()} />}
         {route==='uni' && <UniversityPage {...common()} />}
-        {route==='progress' && <ProgressPage {...common()} />}
-        {route==='resources' && <ResourcesPage {...common()} />}
+        {route==='progress' && <Phase2Progress {...common()} />}
+        {route==='resources' && <Phase2Resources {...common()} />}
         {route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='capture' && <QuickCaptureV2 {...common()} />}
-        {route==='settings' && <SettingsPage {...common()} />}
+        {route==='settings' && <Phase2Settings {...common()} />}
       </main>
     </div>
+    <NotificationManager session={session} timetable={timetable} tasks={tasks} steps={steps} />
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>
 
