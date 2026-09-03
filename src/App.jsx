@@ -10,6 +10,7 @@ import LearningSubjectsPage from './LearningSubjects.jsx'
 import SpeechControls from './SpeechControls.jsx'
 import Phase1Work from './Phase1Work.jsx'
 import QuickCaptureV2 from './QuickCaptureV2.jsx'
+import Phase1Today from './Phase1Today.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -272,7 +273,7 @@ export default function App() {
       </header>
 
       <main ref={mainRef} className="main-content" tabIndex="-1">
-        {route==='today' && <TodayPage {...common()} />}
+        {route==='today' && <Phase1Today {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='subjects' && <LearningSubjectsPage {...common()} />}
         {route==='work' && <Phase1Work {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
         {route==='planner' && <PlannerPage {...common()} />}
