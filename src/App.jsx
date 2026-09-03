@@ -54,6 +54,15 @@ const NOTEBOOK_PROMPTS = {
   revise: 'Help me make a revision plan for this topic using recall, short practice and spaced review. Do not write assessed answers.',
 }
 
+function timetableWeekForDate(value = new Date()) {
+  const anchor = new Date(2026, 7, 31)
+  anchor.setHours(0,0,0,0)
+  const current = new Date(value)
+  current.setHours(0,0,0,0)
+  const weekIndex = Math.floor((current - anchor) / 604800000)
+  return (((weekIndex % 2) + 2) % 2) + 1
+}
+
 function classNames(...items) { return items.filter(Boolean).join(' ') }
 function fmtDate(value) {
   if (!value) return 'No date'
@@ -283,7 +292,8 @@ export default function App() {
 
 function TodayPage({ profile, subjects, tasks, timetable, travel, practice, skills, go }) {
   const todayIndex = ((new Date().getDay() + 6) % 7) + 1
-  const todayLessons = timetable.filter(x=>x.day_of_week===todayIndex)
+  const currentWeek = timetableWeekForDate(new Date())
+  const todayLessons = timetable.filter(x=>x.day_of_week===todayIndex && (x.week_number || 1)===currentWeek)
   const activeTasks = [...tasks].filter(t=>t.status!=='completed').sort(byDue)
   const top3 = activeTasks.slice(0,3)
   const focus = top3[0]
@@ -406,13 +416,14 @@ function WorkPage({ session, subjects, tasks, steps, files, loadAll, notify, sel
 
 function PlannerPage({ session, subjects, events, timetable, travel, loadAll, notify }) {
   const [tab,setTab]=useState('week')
+  const currentWeek=timetableWeekForDate(new Date())
   async function addEvent(e){e.preventDefault();const fd=new FormData(e.currentTarget);const start=new Date(fd.get('start')).toISOString();const {error}=await supabase.from('planner_events').insert({user_id:session.user.id,title:fd.get('title'),category:fd.get('category'),subject_slug:fd.get('subject')||null,starts_at:start,location:fd.get('location')||null});if(error)return notify(error.message);e.currentTarget.reset();await loadAll();notify('Planner event added.')}
-  async function addTimetable(e){e.preventDefault();const fd=new FormData(e.currentTarget);const {error}=await supabase.from('timetable_entries').insert({user_id:session.user.id,day_of_week:Number(fd.get('day')),start_time:fd.get('start'),end_time:fd.get('end'),label:fd.get('label'),subject_slug:fd.get('subject')||null,entry_type:fd.get('type')});if(error)return notify(error.message);e.currentTarget.reset();await loadAll();notify('Timetable entry added.')}
+  async function addTimetable(e){e.preventDefault();const fd=new FormData(e.currentTarget);const {error}=await supabase.from('timetable_entries').insert({user_id:session.user.id,week_number:currentWeek,day_of_week:Number(fd.get('day')),start_time:fd.get('start'),end_time:fd.get('end'),label:fd.get('label'),subject_slug:fd.get('subject')||null,entry_type:fd.get('type')});if(error)return notify(error.message);e.currentTarget.reset();await loadAll();notify('Timetable entry added.')}
   async function addTravel(e){e.preventDefault();const fd=new FormData(e.currentTarget);const {error}=await supabase.from('travel_entries').insert({user_id:session.user.id,direction:fd.get('direction'),sequence:Number(fd.get('sequence')||1),depart_time:fd.get('depart')||null,arrive_time:fd.get('arrive')||null,origin:fd.get('origin'),destination:fd.get('destination'),service:fd.get('service')||null});if(error)return notify(error.message);e.currentTarget.reset();await loadAll();notify('Travel step added.')}
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday']
   return <div className="stack-lg">
-    <div className="tabs big"><button className={tab==='week'?'active':''} onClick={()=>setTab('week')}>Week</button><button className={tab==='events'?'active':''} onClick={()=>setTab('events')}>Events</button><button className={tab==='setup'?'active':''} onClick={()=>setTab('setup')}>Set up timetable & travel</button></div>
-    {tab==='week'&&<div className="week-grid">{days.map((day,i)=><Card key={day}><h3>{day}</h3>{timetable.filter(x=>x.day_of_week===i+1).map(x=><div className={`calendar-block ${SUBJECT_META[x.subject_slug]?.tone||''}`} key={x.id}><strong>{fmtTime(x.start_time)}</strong><span>{x.label}</span></div>)}{!timetable.some(x=>x.day_of_week===i+1)&&<span className="muted">No entries</span>}</Card>)}</div>}
+    <div className="tabs big"><button className={tab==='week'?'active':''} onClick={()=>setTab('week')}>Week {currentWeek}</button><button className={tab==='events'?'active':''} onClick={()=>setTab('events')}>Events</button><button className={tab==='setup'?'active':''} onClick={()=>setTab('setup')}>Set up timetable & travel</button></div>
+    {tab==='week'&&<div className="week-grid">{days.map((day,i)=><Card key={day}><h3>{day}</h3>{timetable.filter(x=>x.day_of_week===i+1&&(x.week_number||1)===currentWeek).map(x=><div className={`calendar-block ${SUBJECT_META[x.subject_slug]?.tone||''}`} key={x.id}><strong>{fmtTime(x.start_time)}</strong><span>{x.label}</span></div>)}{!timetable.some(x=>x.day_of_week===i+1&&(x.week_number||1)===currentWeek)&&<span className="muted">No entries</span>}</Card>)}</div>}
     {tab==='events'&&<div className="grid-2"><Card><h2>Upcoming events</h2>{events.filter(e=>new Date(e.starts_at)>=new Date()).slice(0,20).map(e=><div className="deadline-row" key={e.id}><span className="date-chip">{fmtDate(e.starts_at)}</span><span><strong>{e.title}</strong><small>{fmtTime(e.starts_at)} · {e.category}</small></span></div>)}{!events.length&&<Empty>No events yet.</Empty>}</Card><Card><h2>Add event</h2><form onSubmit={addEvent} className="stack"><input name="title" placeholder="Event title" required/><input type="datetime-local" name="start" required/><select name="category"><option value="school">School</option><option value="work">My Work</option><option value="revision">Revision</option><option value="activity">Activity</option><option value="ucas">UCAS</option><option value="university">University</option><option value="personal">Personal</option></select><select name="subject"><option value="">No subject</option>{subjects.map(s=><option value={s.slug} key={s.slug}>{s.short_name}</option>)}</select><input name="location" placeholder="Location (optional)"/><Button>Add event</Button></form></Card></div>}
     {tab==='setup'&&<div className="grid-2"><Card><h2>Add timetable entry</h2><p className="muted">Use Kellyn’s confirmed school timetable. Do not guess missing lessons or rooms.</p><form onSubmit={addTimetable} className="stack"><select name="day">{days.map((d,i)=><option key={d} value={i+1}>{d}</option>)}</select><div className="form-two"><input type="time" name="start" required/><input type="time" name="end" required/></div><input name="label" placeholder="Lesson or activity" required/><select name="subject"><option value="">No subject</option>{subjects.map(s=><option value={s.slug} key={s.slug}>{s.short_name}</option>)}</select><select name="type"><option value="lesson">Lesson</option><option value="registration">Registration</option><option value="free">Free period</option><option value="break">Break</option><option value="lunch">Lunch</option><option value="other">Other</option></select><Button>Add timetable entry</Button></form></Card>
     <Card><h2>Add travel step</h2><p className="muted">Add each leg of the confirmed school journey in sequence.</p><form onSubmit={addTravel} className="stack"><select name="direction"><option value="to_school">To school</option><option value="from_school">From school</option><option value="other">Other</option></select><input type="number" name="sequence" min="1" defaultValue="1"/><div className="form-two"><input type="time" name="depart"/><input type="time" name="arrive"/></div><input name="origin" placeholder="Origin" required/><input name="destination" placeholder="Destination" required/><input name="service" placeholder="Bus/service e.g. 404"/><Button>Add travel step</Button></form>{travel.slice(0,8).map(x=><div className="simple-row" key={x.id}><Bus size={17}/><span>{x.origin} → {x.destination}</span><small>{x.service||''}</small></div>)}</Card></div>}
