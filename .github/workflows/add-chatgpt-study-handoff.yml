@@ -1,0 +1,166 @@
+name: Add ChatGPT Study handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/add-chatgpt-study-handoff.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Add Study handoff to learning cards
+        shell: python
+        run: |
+          from pathlib import Path
+
+          jsx_path = Path('src/LearningSubjects.jsx')
+          jsx = jsx_path.read_text()
+
+          old_import = "import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'"
+          new_import = "import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, GraduationCap, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'"
+          if old_import in jsx:
+              jsx = jsx.replace(old_import, new_import, 1)
+
+          helper_marker = "function statusClass(status) { return `learning-status learning-status-${status || 'not_started'}` }\n"
+          helper_block = r'''
+
+          const CHATGPT_STUDY_URL = 'https://chatgpt.com/studymode'
+
+          function buildStudyPrompt({ subjectName, subjectSlug, unitTitle, topicTitle, section, spec }) {
+            const qualification = subjectSlug === 'welsh-bacc'
+              ? 'WJEC Level 3 Advanced Skills Baccalaureate Wales'
+              : `WJEC A Level ${subjectName}`
+            const progression = subjectSlug === 'welsh-bacc'
+              ? 'Build towards Level 3 depth, independent thinking, research and the skills needed for the relevant assessment task.'
+              : 'Build towards A-level depth, relevant named thinkers, cases or evidence, links to other ideas, evaluation and exam/application skills.'
+
+            return [
+              '@Study',
+              '',
+              `Teach me this section at ${qualification} standard.`,
+              `Subject: ${subjectName}`,
+              `Unit: ${unitTitle}`,
+              `Main topic: ${topicTitle}`,
+              `Section to study: ${section.title}`,
+              '',
+              'Kellyn Hub starting explanation:',
+              section.body,
+              spec ? `WJEC specification focus: ${spec}` : '',
+              '',
+              'Teach me rather than just giving me notes or a finished answer.',
+              'Start by asking me one short question to find out what I already know.',
+              'Explain the idea in small, dyslexia-friendly chunks using clear language and relevant examples.',
+              'Ask only one question at a time and wait for my answer before continuing.',
+              progression,
+              'Correct misunderstandings as we go and finish with a short retrieval check so I can show what I have learned.',
+              'Do not write assessed work for me or provide a submission-ready answer.'
+            ].filter(Boolean).join('\n')
+          }
+
+          function fallbackCopy(value) {
+            try {
+              const area = document.createElement('textarea')
+              area.value = value
+              area.setAttribute('readonly', '')
+              area.style.position = 'fixed'
+              area.style.opacity = '0'
+              document.body.appendChild(area)
+              area.select()
+              const copied = document.execCommand('copy')
+              area.remove()
+              return copied
+            } catch (_) {
+              return false
+            }
+          }
+          '''
+          if 'const CHATGPT_STUDY_URL' not in jsx:
+              if helper_marker not in jsx:
+                  raise SystemExit('Could not find statusClass insertion point')
+              jsx = jsx.replace(helper_marker, helper_marker + helper_block, 1)
+
+          next_topic_marker = r'''  function nextTopic() {
+            if (!topic || !unit) return
+            const flat = units.flatMap(unitItem => unitItem.topics.map(topicItem => ({ topic: topicItem, unit: unitItem })))
+            const index = flat.findIndex(item => item.topic.slug === topic.slug && item.unit.slug === unit.slug)
+            const next = flat[index + 1]; if (next) openTopic(next.topic, next.unit)
+          }
+          '''
+          handoff_function = r'''
+
+          function openChatGPTStudy(section) {
+            const subjectName = subjects.find(item => item.slug === subjectSlug)?.short_name || SUBJECT_META[subjectSlug]?.label || subjectSlug
+            const prompt = buildStudyPrompt({
+              subjectName,
+              subjectSlug,
+              unitTitle: unit?.title || '',
+              topicTitle: topic?.title || '',
+              section,
+              spec: depth?.spec || ''
+            })
+
+            window.open(CHATGPT_STUDY_URL, '_blank', 'noopener,noreferrer')
+
+            const copied = () => notify?.(`Study prompt copied for ${section.title}. Paste it into ChatGPT Study Mode and send.`)
+            const copyFailed = () => {
+              if (fallbackCopy(prompt)) return copied()
+              window.prompt('Copy this Study Mode prompt, then paste it into ChatGPT:', prompt)
+              notify?.('ChatGPT Study Mode opened. Copy the prompt shown and paste it into ChatGPT.')
+            }
+
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(prompt).then(copied).catch(copyFailed)
+            else copyFailed()
+          }
+          '''
+          if 'function openChatGPTStudy(section)' not in jsx:
+              if next_topic_marker not in jsx:
+                  raise SystemExit('Could not find nextTopic insertion point')
+              jsx = jsx.replace(next_topic_marker, next_topic_marker + handoff_function, 1)
+
+          old_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div><h4>{section.title}</h4><p>{section.body}</p></div></article>)}</div>'''
+          new_sections = '''            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div className="learning-textbook-copy"><h4>{section.title}</h4><p>{section.body}</p><button type="button" className="learning-study-handoff" onClick={() => openChatGPTStudy(section)} title={`Copy a Study Mode prompt for ${section.title} and open ChatGPT`}><GraduationCap size={16}/> Study this in ChatGPT <ExternalLink size={14}/></button></div></article>)}</div>'''
+          if 'className="learning-study-handoff"' not in jsx:
+              if old_sections not in jsx:
+                  raise SystemExit('Could not find textbook section renderer')
+              jsx = jsx.replace(old_sections, new_sections, 1)
+
+          jsx_path.write_text(jsx)
+
+          css_path = Path('src/learning-depth.css')
+          css = css_path.read_text()
+          css_rules = """
+          .learning-textbook-copy{min-width:0}.learning-study-handoff{margin-top:14px;border:1px solid color-mix(in srgb,var(--purple) 35%,var(--border));background:var(--purple-2);color:var(--purple);border-radius:10px;padding:9px 12px;display:inline-flex;align-items:center;gap:7px;font-size:.78rem;font-weight:800;cursor:pointer;line-height:1.2}.learning-study-handoff:hover{border-color:var(--purple);background:color-mix(in srgb,var(--purple-2) 82%,var(--panel));transform:translateY(-1px)}.learning-study-handoff:focus-visible{outline:3px solid color-mix(in srgb,var(--purple) 28%,transparent);outline-offset:2px}.learning-study-handoff svg{flex:0 0 auto}
+          @media(max-width:650px){.learning-study-handoff{width:100%;justify-content:center;padding:11px 12px;margin-top:15px}}
+          """.strip()
+          if '.learning-study-handoff{' not in css:
+              css = css.rstrip() + '\n\n' + css_rules + '\n'
+              css_path.write_text(css)
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install
+      - name: Build production app
+        run: npm run build
+      - name: Commit Study handoff
+        run: |
+          git config user.name "dlbeadle78"
+          git config user.email "dlbeadle@icloud.com"
+          git add src/LearningSubjects.jsx src/learning-depth.css
+          if git diff --cached --quiet; then
+            echo "No changes required"
+          else
+            git commit -m "Add ChatGPT Study handoff to learning sections"
+            git push origin main
+          fi
