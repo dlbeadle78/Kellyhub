@@ -3,7 +3,7 @@
   "name": "Add to Kellyn Hub",
   "version": "0.1.0",
   "description": "Send a page or selected text to Kellyn Hub Quick Capture.",
-  "permissions": ["contextMenus", "tabs", "activeTab"],
+  "permissions": ["contextMenus", "tabs", "activeTab", "scripting"],
   "host_permissions": ["https://kellyhub.vercel.app/*"],
   "background": {"service_worker": "background.js"},
   "action": {"default_title": "Add to Kellyn Hub", "default_popup": "popup.html"}
