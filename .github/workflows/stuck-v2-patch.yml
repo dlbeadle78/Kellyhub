@@ -1,0 +1,42 @@
+name: Wire contextual stuck support
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/stuck-v2-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch Stuck route
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          text=p.read_text()
+          anchor="import Phase1Today from './Phase1Today.jsx'\n"
+          imp="import StuckV2 from './StuckV2.jsx'\n"
+          if imp not in text:
+              if anchor not in text: raise SystemExit('Import anchor missing')
+              text=text.replace(anchor,anchor+imp,1)
+          old="{route==='stuck' && <StuckPage {...common()} />}"
+          new="{route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}"
+          if old in text:text=text.replace(old,new,1)
+          elif new not in text:raise SystemExit('Stuck route missing')
+          p.write_text(text)
+      - name: Commit patch
+        run: |
+          if git diff --quiet -- src/App.jsx; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git commit -m "Use contextual Phase 1 I'm Stuck support"
+          git push origin main
