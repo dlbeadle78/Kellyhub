@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, GraduationCap, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'
 import { depthFor } from './learningDepthGuide.js'
@@ -39,6 +39,56 @@ const RESOURCE_LINKS = {
 }
 
 function statusClass(status) { return `learning-status learning-status-${status || 'not_started'}` }
+
+const CHATGPT_STUDY_URL = 'https://chatgpt.com/studymode'
+
+function buildStudyPrompt({ subjectName, subjectSlug, unitTitle, topicTitle, section, spec }) {
+  const qualification = subjectSlug === 'welsh-bacc'
+    ? 'WJEC Level 3 Advanced Skills Baccalaureate Wales'
+    : `WJEC A Level ${subjectName}`
+  const progression = subjectSlug === 'welsh-bacc'
+    ? 'Build towards Level 3 depth, independent thinking, research and the skills needed for the relevant assessment task.'
+    : 'Build towards A-level depth, relevant named thinkers, cases or evidence, links to other ideas, evaluation and exam/application skills.'
+
+  return [
+    '@Study',
+    '',
+    `Teach me this section at ${qualification} standard.`,
+    `Subject: ${subjectName}`,
+    `Unit: ${unitTitle}`,
+    `Main topic: ${topicTitle}`,
+    `Section to study: ${section.title}`,
+    '',
+    'Kellyn Hub starting explanation:',
+    section.body,
+    spec ? `WJEC specification focus: ${spec}` : '',
+    '',
+    'Teach me rather than just giving me notes or a finished answer.',
+    'Start by asking me one short question to find out what I already know.',
+    'Explain the idea in small, dyslexia-friendly chunks using clear language and relevant examples.',
+    'Ask only one question at a time and wait for my answer before continuing.',
+    progression,
+    'Correct misunderstandings as we go and finish with a short retrieval check so I can show what I have learned.',
+    'Do not write assessed work for me or provide a submission-ready answer.'
+  ].filter(Boolean).join('\\n')
+}
+
+function fallbackCopy(value) {
+  try {
+    const area = document.createElement('textarea')
+    area.value = value
+    area.setAttribute('readonly', '')
+    area.style.position = 'fixed'
+    area.style.opacity = '0'
+    document.body.appendChild(area)
+    area.select()
+    const copied = document.execCommand('copy')
+    area.remove()
+    return copied
+  } catch (_) {
+    return false
+  }
+}
 
 export default function LearningSubjectsPage({ session, subjects = [], tasks = [], practice = [], go, notify }) {
   const availableSubjects = subjects.filter(subject => LEARNING_CONTENT[subject.slug])
@@ -119,6 +169,30 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
     const next = flat[index + 1]; if (next) openTopic(next.topic, next.unit)
   }
 
+  function openChatGPTStudy(section) {
+    const subjectName = subjects.find(item => item.slug === subjectSlug)?.short_name || SUBJECT_META[subjectSlug]?.label || subjectSlug
+    const prompt = buildStudyPrompt({
+      subjectName,
+      subjectSlug,
+      unitTitle: unit?.title || '',
+      topicTitle: topic?.title || '',
+      section,
+      spec: depth?.spec || ''
+    })
+
+    window.open(CHATGPT_STUDY_URL, '_blank', 'noopener,noreferrer')
+
+    const copied = () => notify?.(`Study prompt copied for ${section.title}. Paste it into ChatGPT Study Mode and send.`)
+    const copyFailed = () => {
+      if (fallbackCopy(prompt)) return copied()
+      window.prompt('Copy this Study Mode prompt, then paste it into ChatGPT:', prompt)
+      notify?.('ChatGPT Study Mode opened. Copy the prompt shown and paste it into ChatGPT.')
+    }
+
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(prompt).then(copied).catch(copyFailed)
+    else copyFailed()
+  }
+
   if (!content || !unit || !topic) return <div className="empty">Learning content is loading.</div>
 
   const subjectRecord = subjects.find(item => item.slug === subjectSlug)
@@ -182,7 +256,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
           <div className="learning-section-title"><BookOpen size={19}/><h3>Textbook explanation</h3></div>
           {textbook ? <>
             <div className="learning-textbook-overview"><strong>Big picture</strong><p>{textbook.overview}</p></div>
-            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div><h4>{section.title}</h4><p>{section.body}</p></div></article>)}</div>
+            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div className="learning-textbook-copy"><h4>{section.title}</h4><p>{section.body}</p><button type="button" className="learning-study-handoff" onClick={() => openChatGPTStudy(section)} title={`Copy a Study Mode prompt for ${section.title} and open ChatGPT`}><GraduationCap size={16}/> Study this in ChatGPT <ExternalLink size={14}/></button></div></article>)}</div>
             {!!textbook.examples?.length && <section className="learning-textbook-block examples"><h4>Examples and how to use them</h4>{textbook.examples.map((item, index) => <p key={`${index}-${item}`}><strong>Example {index + 1}.</strong> {item}</p>)}</section>}
             {!!textbook.compare?.length && <section className="learning-textbook-block compare"><h4>Compare, evaluate and make links</h4>{textbook.compare.map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>}
             {!!textbook.mistakes?.length && <section className="learning-textbook-block mistakes"><h4>Common mistakes to avoid</h4>{textbook.mistakes.map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>}
