@@ -277,6 +277,7 @@ export default function App() {
         <div><h1>{pageTitle}</h1><p>{route==='today' ? `${fmtDateLong(new Date())}` : 'Kellyn Hub'}</p></div>
         <div className="top-actions">
           <button title="Text size" onClick={()=>updateProfile({ text_scale: profile?.text_scale >= 1.2 ? 1 : Number(((profile?.text_scale || 1)+0.1).toFixed(1)) })}><span className="aa">A<span>A</span></span><small>Text size</small></button>
+          <button title={profile?.dyslexic_font ? 'Turn OpenDyslexic off' : 'Turn OpenDyslexic on'} aria-pressed={Boolean(profile?.dyslexic_font)} onClick={()=>updateProfile({ dyslexic_font: !profile?.dyslexic_font })}><Accessibility/><small>OpenDyslexic {profile?.dyslexic_font ? 'On' : 'Off'}</small></button>
           <SpeechControls compact getText={()=>mainRef.current?.innerText || ''} label="Read aloud" />
           <button title="Focus mode" onClick={()=>document.body.classList.toggle('focus-app')}><Target/><small>Focus mode</small></button>
           <button title="Dark mode" onClick={()=>updateProfile({ dark_mode: !profile?.dark_mode })}><Moon/><small>Dark mode</small></button>
