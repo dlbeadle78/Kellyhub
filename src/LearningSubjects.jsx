@@ -3,6 +3,7 @@ import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphone
 import { supabase } from './supabase.js'
 import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'
 import { depthFor } from './learningDepthGuide.js'
+import { textbookFor, SUBJECT_ASSESSMENT_LINKS } from './textbookContent.js'
 import SpeechControls from './SpeechControls.jsx'
 import './learning.css'
 import './learning-depth.css'
@@ -54,6 +55,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
   const unit = units.find(item => item.slug === unitSlug) || units[0]
   const topic = unit?.topics.find(item => item.slug === topicSlug) || unit?.topics[0]
   const depth = topic ? depthFor(subjectSlug, topic.slug) : null
+  const textbook = topic ? textbookFor(subjectSlug, topic.slug) : null
 
   useEffect(() => {
     const firstSubject = availableSubjects.find(subject => subject.slug === subjectSlug) || availableSubjects[0]
@@ -124,9 +126,11 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
   const subjectPractice = practice.filter(item => item.subject_slug === subjectSlug)
   const currentStatus = topicStatus(topic)
   const resourceLinks = RESOURCE_LINKS[subjectSlug]
+  const assessmentLinks = SUBJECT_ASSESSMENT_LINKS[subjectSlug] || []
   const currentIndex = unit.topics.findIndex(item => item.slug === topic.slug)
   const nextExists = currentIndex < unit.topics.length - 1 || units.findIndex(item => item.slug === unit.slug) < units.length - 1
-  const readText = [topic.title, topic.summary, ...(depth?.depth || []), ...(depth?.evidence || []), ...(depth?.analysis || []), depth?.exam || ''].filter(Boolean).join('. ')
+  const textbookText = textbook ? [textbook.overview, ...(textbook.sections || []).flatMap(item => [item.title, item.body]), ...(textbook.examples || []), ...(textbook.compare || [])].filter(Boolean) : []
+  const readText = [topic.title, topic.summary, ...textbookText, ...(depth?.depth || []), ...(depth?.evidence || []), ...(depth?.analysis || []), depth?.exam || ''].filter(Boolean).join('. ')
 
   return <div className="learning-shell">
     <div className="learning-subject-switcher" aria-label="Choose subject">
@@ -135,7 +139,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
 
     <section className="learning-heading">
       <div className={`learning-round-icon ${SUBJECT_META[subjectSlug]?.tone || ''}`}>{SUBJECT_META[subjectSlug]?.icon}</div>
-      <div className="learning-heading-copy"><span className="learning-kicker">A-level / Level 3 learning</span><h2>{subjectRecord?.short_name || SUBJECT_META[subjectSlug]?.label}</h2><p>{content.intro}</p></div>
+      <div className="learning-heading-copy"><span className="learning-kicker">A-level / Level 3 resource centre</span><h2>{subjectRecord?.short_name || SUBJECT_META[subjectSlug]?.label}</h2><p>{content.intro}</p></div>
       <div className="learning-progress-card"><span>Your learning progress</span><strong>{subjectProgress}%</strong><div className="learning-progress-track"><span style={{ width: `${subjectProgress}%` }} /></div><small>{confidentCount} confident · {startedCount} started · {subjectTopics.length} topics</small></div>
     </section>
 
@@ -149,32 +153,44 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
             return <button key={topicItem.slug} className={topic.slug === topicItem.slug ? 'active' : ''} onClick={() => openTopic(topicItem, unitItem)}><span className="learning-topic-number">{index + 1}</span><span><strong>{topicItem.title}</strong><small>{topicItem.time} mins</small></span><span className={statusClass(status)} title={LEARNING_STATUS[status]} /></button>
           })}</div>}
         </section>)}
-        <div className="learning-reference-box"><strong>Study guide & official reference material</strong><p>Use the Hub to learn actively. The full Year 2 study guide gives a longer reference version, while WJEC remains the source for the specification and assessment requirements.</p><a href={resourceLinks?.guide} target="_blank" rel="noreferrer">Open Year 2 study guide <ExternalLink size={14}/></a><a href={resourceLinks?.wjec} target="_blank" rel="noreferrer">WJEC qualification page <ExternalLink size={14}/></a><a href={resourceLinks?.library} target="_blank" rel="noreferrer">Kellyn WJEC resource library <ExternalLink size={14}/></a></div>
+        <div className="learning-reference-box"><strong>Reference library</strong><p>The Hub is the main learning resource. Use the PDF guide for longer revision, and WJEC for official specification, papers and assessment requirements.</p><a href={resourceLinks?.guide} target="_blank" rel="noreferrer">Full Year 2 study guide <ExternalLink size={14}/></a><a href={resourceLinks?.wjec} target="_blank" rel="noreferrer">WJEC qualification page <ExternalLink size={14}/></a><a href={resourceLinks?.library} target="_blank" rel="noreferrer">Kellyn WJEC resource library <ExternalLink size={14}/></a></div>
       </aside>
 
       <main className="learning-topic-panel" id="learning-topic-panel">
         <div className="learning-unit-context"><span>{unit.title}</span>{unit.note && <small>{unit.note}</small>}</div>
-        <div className="learning-topic-head"><div><span className="learning-kicker">Current topic · about {topic.time} minutes</span><h2>{topic.title}</h2></div><div className="learning-read-actions"><SpeechControls text={readText} label="Read topic" /></div></div>
+        <div className="learning-topic-head"><div><span className="learning-kicker">Online textbook topic · about {topic.time} minutes</span><h2>{topic.title}</h2></div><div className="learning-read-actions"><SpeechControls text={readText} label="Read topic" /></div></div>
 
-        {depth?.spec && <div className="learning-spec"><Scale size={18}/><div><strong>What the specification expects</strong><span>{depth.spec}</span></div></div>}
+        {depth?.spec && <div className="learning-spec"><Scale size={18}/><div><strong>What the WJEC specification expects</strong><span>{depth.spec}</span></div></div>}
 
         <nav className="learning-tabs" aria-label="Learning stages">
-          <button className={tab === 'learn' ? 'active' : ''} onClick={() => setTab('learn')}><BookOpen size={16}/> Learn</button>
+          <button className={tab === 'learn' ? 'active' : ''} onClick={() => setTab('learn')}><BookOpen size={16}/> Overview</button>
+          <button className={tab === 'textbook' ? 'active' : ''} onClick={() => setTab('textbook')}><BookOpen size={16}/> Textbook</button>
           <button className={tab === 'depth' ? 'active' : ''} onClick={() => setTab('depth')}><Lightbulb size={16}/> A-level depth</button>
           <button className={tab === 'evidence' ? 'active' : ''} onClick={() => setTab('evidence')}><FileText size={16}/> Evidence & analysis</button>
           <button className={tab === 'terms' ? 'active' : ''} onClick={() => setTab('terms')}><FileText size={16}/> Key terms</button>
           <button className={tab === 'check' ? 'active' : ''} onClick={() => setTab('check')}><CheckCircle2 size={16}/> Check</button>
-          <button className={tab === 'try' ? 'active' : ''} onClick={() => setTab('try')}><Target size={16}/> Try it</button>
+          <button className={tab === 'try' ? 'active' : ''} onClick={() => setTab('try')}><Target size={16}/> Assessment</button>
         </nav>
 
         {tab === 'learn' && <div className="learning-stage">
           <section className="learning-simple-explanation"><div className="learning-section-title"><Lightbulb size={19}/><h3>Core understanding</h3></div><p>{topic.summary}</p></section>
           <section><div className="learning-section-title"><BookOpen size={19}/><h3>What you must understand</h3></div><div className="learning-key-ideas">{topic.keyIdeas.map((idea, index) => <div key={idea}><span>{index + 1}</span><p>{idea}</p></div>)}</div></section>
-          <div className="learning-next-instruction"><Headphones size={20}/><div><strong>Do not stop at the summary</strong><span>Use A-level depth next. The first tab gives the structure; the next tabs contain the detailed knowledge, named evidence, legal authorities, historical examples and evaluation needed for higher-level work.</span></div></div>
+          <div className="learning-next-instruction"><BookOpen size={20}/><div><strong>Use this like a textbook, not a revision card.</strong><span>Open the Textbook tab for full explanations and examples. Then use A-level depth for extra detail, Evidence & analysis for named knowledge, and Assessment when you are ready to test it.</span></div></div>
+        </div>}
+
+        {tab === 'textbook' && <div className="learning-stage">
+          <div className="learning-section-title"><BookOpen size={19}/><h3>Textbook explanation</h3></div>
+          {textbook ? <>
+            <div className="learning-textbook-overview"><strong>Big picture</strong><p>{textbook.overview}</p></div>
+            <div className="learning-textbook-sections">{(textbook.sections || []).map((section, index) => <article key={`${section.title}-${index}`}><div className="learning-textbook-number">{index + 1}</div><div><h4>{section.title}</h4><p>{section.body}</p></div></article>)}</div>
+            {!!textbook.examples?.length && <section className="learning-textbook-block examples"><h4>Examples and how to use them</h4>{textbook.examples.map((item, index) => <p key={`${index}-${item}`}><strong>Example {index + 1}.</strong> {item}</p>)}</section>}
+            {!!textbook.compare?.length && <section className="learning-textbook-block compare"><h4>Compare, evaluate and make links</h4>{textbook.compare.map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>}
+            {!!textbook.mistakes?.length && <section className="learning-textbook-block mistakes"><h4>Common mistakes to avoid</h4>{textbook.mistakes.map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>}
+          </> : <p className="learning-muted">This topic is being expanded into the online textbook. Use A-level depth and the full study guide while this section is completed.</p>}
         </div>}
 
         {tab === 'depth' && <div className="learning-stage">
-          <div className="learning-section-title"><Lightbulb size={19}/><h3>Detailed learning</h3></div>
+          <div className="learning-section-title"><Lightbulb size={19}/><h3>A-level depth and extension</h3></div>
           {depth?.depth?.length ? <div className="learning-depth-copy">{depth.depth.map((paragraph, index) => <section key={index}><span>{index + 1}</span><p>{paragraph}</p></section>)}</div> : <p className="learning-muted">Use your school notes and the WJEC specification for the detailed content of this topic. This section is still being expanded.</p>}
           {depth?.exam && <div className="learning-exam-box"><strong>Exam / assessment thinking</strong><p>{depth.exam}</p></div>}
         </div>}
@@ -185,16 +201,23 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
             <section><strong>Knowledge and evidence to know</strong>{(depth?.evidence || ['Use the named evidence, cases, studies or events taught by school for this topic.']).map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>
             <section><strong>Questions that create analysis</strong>{(depth?.analysis || ['What supports this explanation?', 'What challenges it?', 'What judgement follows from the evidence?']).map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>
           </div>
-          <div className="learning-boundary"><strong>Know what the evidence proves.</strong><span>Kellyn should be able to explain the study, case, legislation, event, source or evidence, then say how it supports or challenges a conclusion. The aim is understanding, not memorising an isolated list.</span></div>
+          <div className="learning-boundary"><strong>Know what the evidence proves.</strong><span>Explain the study, case, legislation, event or source, then say how it supports, challenges or qualifies a conclusion. The aim is usable knowledge, not memorising isolated names.</span></div>
         </div>}
 
         {tab === 'terms' && <div className="learning-stage"><div className="learning-section-title"><FileText size={19}/><h3>Key terms</h3></div><p className="learning-muted">Say the meaning yourself before re-reading the definition.</p><div className="learning-term-grid">{topic.terms.map(([term, definition]) => <article key={term}><strong>{term}</strong><p>{definition}</p><SpeechControls text={`${term}. ${definition}`} label="Listen" compact /></article>)}</div><button className="learning-primary" onClick={() => setTab('check')}>I’m ready to check myself <ChevronRight size={16}/></button></div>}
 
-        {tab === 'check' && <div className="learning-stage"><div className="learning-section-title"><CheckCircle2 size={19}/><h3>Retrieval check</h3></div><p className="learning-muted">Try to answer before revealing the answer. Then explain one of the answers aloud in your own words.</p><div className="learning-recall-list">{topic.recall.map(([question, answer], index) => <article key={question}><strong>{index + 1}. {question}</strong>{revealed[index] ? <div className="learning-answer"><span>Check:</span>{answer}</div> : <button onClick={() => setRevealed(current => ({ ...current, [index]: true }))}>Show answer</button>}</article>)}</div><button className="learning-secondary" onClick={() => setRevealed({})}><RotateCcw size={16}/> Try the questions again</button></div>}
+        {tab === 'check' && <div className="learning-stage"><div className="learning-section-title"><CheckCircle2 size={19}/><h3>Retrieval check</h3></div><p className="learning-muted">Try to answer before revealing the answer. Then explain one answer aloud in your own words.</p><div className="learning-recall-list">{topic.recall.map(([question, answer], index) => <article key={question}><strong>{index + 1}. {question}</strong>{revealed[index] ? <div className="learning-answer"><span>Check:</span>{answer}</div> : <button onClick={() => setRevealed(current => ({ ...current, [index]: true }))}>Show answer</button>}</article>)}</div><button className="learning-secondary" onClick={() => setRevealed({})}><RotateCcw size={16}/> Try the questions again</button></div>}
 
-        {tab === 'try' && <div className="learning-stage"><div className="learning-section-title"><Target size={19}/><h3>Use what you have learned</h3></div><div className="learning-practice-box"><strong>Short learning activity</strong><p>{topic.activity}</p></div><div className="learning-boundary"><strong>Learning practice, not assessed schoolwork.</strong><span>The Hub can teach, quiz, structure and prompt. Kellyn completes any real assessed response herself.</span></div><button className="learning-secondary" onClick={() => go?.('practice')}>Go to Mock & Practice <ChevronRight size={16}/></button></div>}
+        {tab === 'try' && <div className="learning-stage">
+          <div className="learning-section-title"><Target size={19}/><h3>End-of-topic assessment and practice</h3></div>
+          <div className="learning-practice-box"><strong>Short learning activity</strong><p>{topic.activity}</p></div>
+          {!!textbook?.assessment?.length && <section className="learning-assessment-prompts"><h4>Questions to test this topic</h4>{textbook.assessment.map((item, index) => <article key={`${index}-${item}`}><span>{index + 1}</span><p>{item}</p></article>)}</section>}
+          <section className="learning-assessment-links"><h4>Past papers, mark schemes and examiner guidance</h4>{assessmentLinks.map(item => <a key={item.href} href={item.href} target="_blank" rel="noreferrer">{item.label} <ExternalLink size={14}/></a>)}</section>
+          <div className="learning-boundary"><strong>Learning practice, not assessed schoolwork.</strong><span>The Hub can teach, quiz, structure and prompt. Kellyn completes real assessed responses herself.</span></div>
+          <button className="learning-secondary" onClick={() => go?.('practice')}>Go to Mock & Practice <ChevronRight size={16}/></button>
+        </div>}
 
-        <section className="learning-confidence"><div><strong>How secure is this topic now?</strong><span>Be realistic. “Confident” means you can explain it and use the knowledge without simply rereading it.</span></div><div className="learning-confidence-buttons">
+        <section className="learning-confidence"><div><strong>How secure is this topic now?</strong><span>Be realistic. “Confident” means you can explain it, use examples and apply or evaluate the knowledge without simply rereading it.</span></div><div className="learning-confidence-buttons">
           {['needs_review','developing','confident'].map(status => <button disabled={busyKey === `${subjectSlug}:${unit.slug}:${topic.slug}`} className={currentStatus === status ? 'active' : ''} key={status} onClick={() => setLearningStatus(status)}>{LEARNING_STATUS[status]}</button>)}
         </div></section>
 
