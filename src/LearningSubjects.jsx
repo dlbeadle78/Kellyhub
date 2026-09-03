@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphones, Lightbulb, RotateCcw, Scale, Target } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'
-import { depthFor } from './learningDepth.js'
+import { depthFor } from './learningDepthGuide.js'
 import SpeechControls from './SpeechControls.jsx'
 import './learning.css'
 import './learning-depth.css'
@@ -15,10 +15,26 @@ const SUBJECT_META = {
 }
 
 const RESOURCE_LINKS = {
-  sociology: { wjec: 'https://www.wjec.co.uk/qualifications/sociology-as-a-level/', library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/sociology' },
-  law: { wjec: 'https://www.wjec.co.uk/qualifications/law-as-a-level/', library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/law' },
-  history: { wjec: 'https://www.wjec.co.uk/qualifications/history-as-a-level/', library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/history' },
-  'welsh-bacc': { wjec: 'https://www.wjec.co.uk/qualifications/level-3-advanced-skills-baccalaureate-wales/', library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/advanced-skills-baccalaureate' }
+  sociology: {
+    wjec: 'https://www.wjec.co.uk/qualifications/sociology-as-a-level/',
+    library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/sociology',
+    guide: 'https://github.com/dlbeadle78/kellynwjec/blob/main/subjects/sociology/study-guide-year-2.pdf'
+  },
+  law: {
+    wjec: 'https://www.wjec.co.uk/qualifications/law-as-a-level/',
+    library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/law',
+    guide: 'https://github.com/dlbeadle78/kellynwjec/blob/main/subjects/law/study-guide-year-2.pdf'
+  },
+  history: {
+    wjec: 'https://www.wjec.co.uk/qualifications/history-as-a-level/',
+    library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/history',
+    guide: 'https://github.com/dlbeadle78/kellynwjec/blob/main/subjects/history/study-guide-year-2.pdf'
+  },
+  'welsh-bacc': {
+    wjec: 'https://www.wjec.co.uk/qualifications/level-3-advanced-skills-baccalaureate-wales/',
+    library: 'https://github.com/dlbeadle78/kellynwjec/tree/main/subjects/advanced-skills-baccalaureate',
+    guide: 'https://github.com/dlbeadle78/kellynwjec/blob/main/subjects/advanced-skills-baccalaureate/study-guide.pdf'
+  }
 }
 
 function statusClass(status) { return `learning-status learning-status-${status || 'not_started'}` }
@@ -133,7 +149,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
             return <button key={topicItem.slug} className={topic.slug === topicItem.slug ? 'active' : ''} onClick={() => openTopic(topicItem, unitItem)}><span className="learning-topic-number">{index + 1}</span><span><strong>{topicItem.title}</strong><small>{topicItem.time} mins</small></span><span className={statusClass(status)} title={LEARNING_STATUS[status]} /></button>
           })}</div>}
         </section>)}
-        <div className="learning-reference-box"><strong>Official reference material</strong><p>Use WJEC to check the specification, papers and assessment requirements. Learning and practice stay inside the Hub.</p><a href={resourceLinks?.wjec} target="_blank" rel="noreferrer">WJEC qualification page <ExternalLink size={14}/></a><a href={resourceLinks?.library} target="_blank" rel="noreferrer">Kellyn WJEC resource library <ExternalLink size={14}/></a></div>
+        <div className="learning-reference-box"><strong>Study guide & official reference material</strong><p>Use the Hub to learn actively. The full Year 2 study guide gives a longer reference version, while WJEC remains the source for the specification and assessment requirements.</p><a href={resourceLinks?.guide} target="_blank" rel="noreferrer">Open Year 2 study guide <ExternalLink size={14}/></a><a href={resourceLinks?.wjec} target="_blank" rel="noreferrer">WJEC qualification page <ExternalLink size={14}/></a><a href={resourceLinks?.library} target="_blank" rel="noreferrer">Kellyn WJEC resource library <ExternalLink size={14}/></a></div>
       </aside>
 
       <main className="learning-topic-panel" id="learning-topic-panel">
@@ -154,7 +170,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
         {tab === 'learn' && <div className="learning-stage">
           <section className="learning-simple-explanation"><div className="learning-section-title"><Lightbulb size={19}/><h3>Core understanding</h3></div><p>{topic.summary}</p></section>
           <section><div className="learning-section-title"><BookOpen size={19}/><h3>What you must understand</h3></div><div className="learning-key-ideas">{topic.keyIdeas.map((idea, index) => <div key={idea}><span>{index + 1}</span><p>{idea}</p></div>)}</div></section>
-          <div className="learning-next-instruction"><Headphones size={20}/><div><strong>Do not stop at the summary</strong><span>Use A-level depth next. The first tab gives the structure; the next tabs contain the detail, named knowledge and evaluation needed for higher-level work.</span></div></div>
+          <div className="learning-next-instruction"><Headphones size={20}/><div><strong>Do not stop at the summary</strong><span>Use A-level depth next. The first tab gives the structure; the next tabs contain the detailed knowledge, named evidence, legal authorities, historical examples and evaluation needed for higher-level work.</span></div></div>
         </div>}
 
         {tab === 'depth' && <div className="learning-stage">
@@ -166,10 +182,10 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
         {tab === 'evidence' && <div className="learning-stage">
           <div className="learning-section-title"><FileText size={19}/><h3>Named knowledge, evidence and analysis</h3></div>
           <div className="learning-depth-grid">
-            <section><strong>Knowledge and evidence to know</strong>{(depth?.evidence || ['Use the named evidence, cases, studies or events taught by school for this topic.']).map(item => <p key={item}>• {item}</p>)}</section>
-            <section><strong>Questions that create analysis</strong>{(depth?.analysis || ['What supports this explanation?', 'What challenges it?', 'What judgement follows from the evidence?']).map(item => <p key={item}>• {item}</p>)}</section>
+            <section><strong>Knowledge and evidence to know</strong>{(depth?.evidence || ['Use the named evidence, cases, studies or events taught by school for this topic.']).map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>
+            <section><strong>Questions that create analysis</strong>{(depth?.analysis || ['What supports this explanation?', 'What challenges it?', 'What judgement follows from the evidence?']).map((item, index) => <p key={`${index}-${item}`}>• {item}</p>)}</section>
           </div>
-          <div className="learning-boundary"><strong>Use evidence, do not memorise lists.</strong><span>Kellyn should be able to explain what the named study, authority, event or evidence proves and how it affects a judgement.</span></div>
+          <div className="learning-boundary"><strong>Know what the evidence proves.</strong><span>Kellyn should be able to explain the study, case, legislation, event, source or evidence, then say how it supports or challenges a conclusion. The aim is understanding, not memorising an isolated list.</span></div>
         </div>}
 
         {tab === 'terms' && <div className="learning-stage"><div className="learning-section-title"><FileText size={19}/><h3>Key terms</h3></div><p className="learning-muted">Say the meaning yourself before re-reading the definition.</p><div className="learning-term-grid">{topic.terms.map(([term, definition]) => <article key={term}><strong>{term}</strong><p>{definition}</p><SpeechControls text={`${term}. ${definition}`} label="Listen" compact /></article>)}</div><button className="learning-primary" onClick={() => setTab('check')}>I’m ready to check myself <ChevronRight size={16}/></button></div>}
