@@ -5,16 +5,40 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Correct known UCAS JSX structure
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/App.jsx')
+          text = p.read_text()
+          old = '<div className="prompt-grid"><span>What did you notice?</span><span>What did you learn?</span><span>How did it make you feel?</span><span>How has it shaped your interests?</span></div></div></Card><Card>'
+          new = '<div className="prompt-grid"><span>What did you notice?</span><span>What did you learn?</span><span>How did it make you feel?</span><span>How has it shaped your interests?</span></div></div></div></Card><Card>'
+          if old in text:
+              p.write_text(text.replace(old, new, 1))
+      - name: Commit source correction if required
+        run: |
+          if ! git diff --quiet -- src/App.jsx; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/App.jsx
+            git commit -m "Fix UCAS page JSX structure"
+            git push origin main
+          fi
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
       - name: Install dependencies
         run: npm install
       - name: Build production app
