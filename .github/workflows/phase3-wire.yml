@@ -1,0 +1,71 @@
+name: Wire Phase 3 application
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/phase3-wire.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - name: Wire Phase 3
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          text=p.read_text()
+
+          text=text.replace("import Phase2Progress from './Phase2Progress.jsx'\n", "import Phase3Progress from './Phase3Progress.jsx'\n")
+          anchor="import NotificationManager from './NotificationManager.jsx'\n"
+          additions="import Phase3Practice from './Phase3Practice.jsx'\nimport Phase3University from './Phase3University.jsx'\nimport Phase3Support from './Phase3Support.jsx'\n"
+          if "import Phase3Practice" not in text:
+              text=text.replace(anchor,anchor+additions,1)
+
+          text=text.replace("  const [email, setEmail] = useState('')\n  const [password, setPassword] = useState('')", "  const [email, setEmail] = useState('')\n  const [password, setPassword] = useState('')\n  const [name, setName] = useState('')",1)
+          text=text.replace(": supabase.auth.signUp({ email, password, options: { data: { display_name: 'Kellyn' } } })", ": supabase.auth.signUp({ email, password, options: { data: { display_name: name.trim() || 'Student' } } })",1)
+          old="        <label>Email<input type=\"email\" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete=\"email\" /></label>\n        <label>Password<input type=\"password\" value={password} onChange={e=>setPassword(e.target.value)} required minLength=\"8\" autoComplete={mode==='login'?'current-password':'new-password'} /></label>"
+          new="        {mode==='signup' && <label>Name<input type=\"text\" value={name} onChange={e=>setName(e.target.value)} required autoComplete=\"name\" /></label>}\n        <label>Email<input type=\"email\" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete=\"email\" /></label>\n        <label>Password<input type=\"password\" value={password} onChange={e=>setPassword(e.target.value)} required minLength=\"8\" autoComplete={mode==='login'?'current-password':'new-password'} /></label>"
+          if old in text:text=text.replace(old,new,1)
+
+          text=text.replace("  const [route, setRoute] = useState(location.hash.replace('#/','') || 'today')", "  const [route, setRoute] = useState((location.hash.replace('#/','').split('?')[0]) || 'today')",1)
+          text=text.replace("    const onHash = () => setRoute(location.hash.replace('#/','') || 'today')", "    const onHash = () => setRoute((location.hash.replace('#/','').split('?')[0]) || 'today')",1)
+
+          replacements={
+            "supabase.from('tasks').select('*').order('due_at', { ascending: true, nullsFirst: false })":"supabase.from('tasks').select('*').eq('user_id', uid).order('due_at', { ascending: true, nullsFirst: false })",
+            "supabase.from('task_steps').select('*').order('order_index')":"supabase.from('task_steps').select('*').eq('user_id', uid).order('order_index')",
+            "supabase.from('planner_events').select('*').order('starts_at')":"supabase.from('planner_events').select('*').eq('user_id', uid).order('starts_at')",
+            "supabase.from('timetable_entries').select('*').order('day_of_week').order('start_time')":"supabase.from('timetable_entries').select('*').eq('user_id', uid).order('day_of_week').order('start_time')",
+            "supabase.from('travel_entries').select('*').eq('active', true).order('direction').order('sequence')":"supabase.from('travel_entries').select('*').eq('user_id', uid).eq('active', true).order('direction').order('sequence')",
+            "supabase.from('evidence_bank').select('*').order('event_date', { ascending: false, nullsFirst: false })":"supabase.from('evidence_bank').select('*').eq('user_id', uid).order('event_date', { ascending: false, nullsFirst: false })",
+            "supabase.from('university_choices').select('*').order('favourite', { ascending: false }).order('university_name')":"supabase.from('university_choices').select('*').eq('user_id', uid).order('favourite', { ascending: false }).order('university_name')",
+            "supabase.from('practice_records').select('*').order('completed_at', { ascending: false })":"supabase.from('practice_records').select('*').eq('user_id', uid).order('completed_at', { ascending: false })",
+            "supabase.from('independent_skills').select('*').order('category').order('skill')":"supabase.from('independent_skills').select('*').eq('user_id', uid).order('category').order('skill')",
+            "supabase.from('quick_capture').select('*').order('created_at', { ascending: false })":"supabase.from('quick_capture').select('*').eq('user_id', uid).order('created_at', { ascending: false })",
+            "supabase.from('user_files').select('*').order('created_at', { ascending: false })":"supabase.from('user_files').select('*').eq('user_id', uid).order('created_at', { ascending: false })",
+          }
+          for old,new in replacements.items():
+              if old in text:text=text.replace(old,new,1)
+
+          text=text.replace("  const pageTitle = NAV.find(([key])=>key===route)?.[1] || 'Kellyn Hub'", "  const pageTitle = route==='support' ? 'Support' : (NAV.find(([key])=>key===route)?.[1] || 'Kellyn Hub')",1)
+          navline="        {NAV.map(([key,label,Icon]) => <button key={key} className={classNames('nav-item', route===key && 'active', key==='stuck' && 'stuck-nav')} onClick={()=>go(key)}><Icon size={20}/><span>{label}</span></button>)}"
+          if navline in text and "route==='support'" not in text[text.find(navline):text.find(navline)+1000]:
+              text=text.replace(navline,navline+"\n        {profile?.role==='admin' && <button className={classNames('nav-item', route==='support' && 'active')} onClick={()=>go('support')}><UserRound size={20}/><span>Support</span></button>}",1)
+
+          text=text.replace("{route==='practice' && <PracticePage {...common()} />}", "{route==='practice' && <Phase3Practice {...common()} />}",1)
+          text=text.replace("{route==='uni' && <UniversityPage {...common()} />}", "{route==='uni' && <Phase3University {...common()} />}",1)
+          text=text.replace("{route==='progress' && <Phase2Progress {...common()} />}", "{route==='progress' && <Phase3Progress {...common()} />}",1)
+          support="        {route==='support' && <Phase3Support {...common()} />}\n"
+          marker="        {route==='settings' && <Phase2Settings {...common()} />}\n"
+          if support not in text:text=text.replace(marker,marker+support,1)
+          p.write_text(text)
+      - name: Commit
+        run: |
+          if git diff --quiet -- src/App.jsx; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git commit -m "Use Phase 3 practice university progress and support views"
+          git push origin main
