@@ -5,6 +5,7 @@ import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'
 import { depthFor } from './learningDepth.js'
 import SpeechControls from './SpeechControls.jsx'
 import './learning.css'
+import './learning-depth.css'
 
 const SUBJECT_META = {
   sociology: { tone: 'mint', icon: '◉', label: 'Sociology' },
