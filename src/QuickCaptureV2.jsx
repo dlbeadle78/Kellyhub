@@ -54,7 +54,7 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
 
   useEffect(()=>{setAccepted(false)},[title,note,queued.length])
   useEffect(()=>{
-    const params=new URLSearchParams(location.hash.split('?')[1]||'');const incoming=params.get('text')||params.get('url');const incomingTitle=params.get('title');if(incoming&&!note)setNote(incoming);if(incomingTitle&&!title)setTitle(incomingTitle)
+    const hashQuery=location.hash.includes('?')?location.hash.split('?')[1]:'';const params=new URLSearchParams(location.search||hashQuery);const incoming=params.get('text')||params.get('url');const incomingTitle=params.get('title');if(incoming&&!note)setNote(incoming);if(incomingTitle&&!title)setTitle(incomingTitle)
   },[])
   useEffect(()=>{const onPaste=e=>{const pasted=Array.from(e.clipboardData?.files||[]);if(pasted.length){e.preventDefault();setQueued(current=>[...current,...pasted]);notify?.('Screenshot added to Quick Capture.')}};window.addEventListener('paste',onPaste);return()=>window.removeEventListener('paste',onPaste)},[])
 
