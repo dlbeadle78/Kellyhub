@@ -1,0 +1,38 @@
+name: Wire seven-day calendar planner
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/wire-weekly-planner.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use weekly calendar planner
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          text=p.read_text()
+          import_anchor="import Phase3Support from './Phase3Support.jsx'\n"
+          if "import WeeklyPlanner" not in text:
+              if import_anchor not in text:
+                  raise SystemExit('Import anchor not found')
+              text=text.replace(import_anchor,import_anchor+"import WeeklyPlanner from './WeeklyPlanner.jsx'\n",1)
+          old="{route==='planner' && <PlannerPage {...common()} />}"
+          new="{route==='planner' && <WeeklyPlanner {...common()} />}"
+          if old not in text:
+              raise SystemExit('Planner route not found')
+          text=text.replace(old,new,1)
+          p.write_text(text)
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx
+          git commit -m "Use seven-day calendar planner"
+          git push origin main
