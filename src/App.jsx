@@ -11,6 +11,7 @@ import SpeechControls from './SpeechControls.jsx'
 import Phase1Work from './Phase1Work.jsx'
 import QuickCaptureV2 from './QuickCaptureV2.jsx'
 import Phase1Today from './Phase1Today.jsx'
+import StuckV2 from './StuckV2.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -282,7 +283,7 @@ export default function App() {
         {route==='uni' && <UniversityPage {...common()} />}
         {route==='progress' && <ProgressPage {...common()} />}
         {route==='resources' && <ResourcesPage {...common()} />}
-        {route==='stuck' && <StuckPage {...common()} />}
+        {route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='capture' && <QuickCaptureV2 {...common()} />}
         {route==='settings' && <SettingsPage {...common()} />}
       </main>
