@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { BookOpen, CheckCircle2, ChevronRight, ExternalLink, FileText, Headphones, Lightbulb, RotateCcw, Target, Volume2, XCircle } from 'lucide-react'
 import { supabase } from './supabase.js'
 import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'
+import SpeechControls from './SpeechControls.jsx'
 import './learning.css'
 
 const SUBJECT_META = {
@@ -221,8 +222,7 @@ export default function LearningSubjectsPage({ session, subjects = [], tasks = [
             <h2>{topic.title}</h2>
           </div>
           <div className="learning-read-actions">
-            <button onClick={readTopic}><Volume2 size={17}/> Read topic</button>
-            <button onClick={stopSpeaking}><XCircle size={17}/> Stop</button>
+            <SpeechControls text={`${topic.title}. ${topic.summary}. Key ideas. ${topic.keyIdeas.join('. ')}`} label="Read topic" />
           </div>
         </div>
 

@@ -7,6 +7,9 @@ import {
 } from 'lucide-react'
 import { supabase } from './supabase.js'
 import LearningSubjectsPage from './LearningSubjects.jsx'
+import SpeechControls from './SpeechControls.jsx'
+import Phase1Work from './Phase1Work.jsx'
+import QuickCaptureV2 from './QuickCaptureV2.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -262,7 +265,7 @@ export default function App() {
         <div><h1>{pageTitle}</h1><p>{route==='today' ? `${fmtDateLong(new Date())}` : 'Kellyn Hub'}</p></div>
         <div className="top-actions">
           <button title="Text size" onClick={()=>updateProfile({ text_scale: profile?.text_scale >= 1.2 ? 1 : Number(((profile?.text_scale || 1)+0.1).toFixed(1)) })}><span className="aa">A<span>A</span></span><small>Text size</small></button>
-          <button title="Read page aloud" onClick={()=>speak(mainRef.current?.innerText || '')}><Volume2/><small>Read aloud</small></button>
+          <SpeechControls compact getText={()=>mainRef.current?.innerText || ''} label="Read aloud" />
           <button title="Focus mode" onClick={()=>document.body.classList.toggle('focus-app')}><Target/><small>Focus mode</small></button>
           <button title="Dark mode" onClick={()=>updateProfile({ dark_mode: !profile?.dark_mode })}><Moon/><small>Dark mode</small></button>
         </div>
@@ -271,7 +274,7 @@ export default function App() {
       <main ref={mainRef} className="main-content" tabIndex="-1">
         {route==='today' && <TodayPage {...common()} />}
         {route==='subjects' && <LearningSubjectsPage {...common()} />}
-        {route==='work' && <WorkPage {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
+        {route==='work' && <Phase1Work {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
         {route==='planner' && <PlannerPage {...common()} />}
         {route==='practice' && <PracticePage {...common()} />}
         {route==='ucas' && <UcasPage {...common()} />}
@@ -279,7 +282,7 @@ export default function App() {
         {route==='progress' && <ProgressPage {...common()} />}
         {route==='resources' && <ResourcesPage {...common()} />}
         {route==='stuck' && <StuckPage {...common()} />}
-        {route==='capture' && <CapturePage {...common()} />}
+        {route==='capture' && <QuickCaptureV2 {...common()} />}
         {route==='settings' && <SettingsPage {...common()} />}
       </main>
     </div>
