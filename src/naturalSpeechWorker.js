@@ -3,6 +3,7 @@ import { KokoroTTS } from 'kokoro-js'
 let ttsPromise = null
 let activeRequestId = null
 let loadedDevice = null
+let inferencePrimed = false
 
 async function detectDevice() {
   try {
@@ -45,42 +46,62 @@ async function getTTS(requestId) {
     ttsPromise = loadTTS(requestId).catch((error) => {
       ttsPromise = null
       loadedDevice = null
+      inferencePrimed = false
       throw error
     })
   }
   return ttsPromise
 }
 
-function splitText(text, maxChars = 300) {
+async function primeInference(tts) {
+  if (inferencePrimed) return
+  try {
+    await tts.generate('Ready.', { voice: 'bf_emma', speed: 1 })
+    inferencePrimed = true
+  } catch (_) {
+    // Model loading still counts as a useful warm-up if inference priming fails.
+  }
+}
+
+function splitText(text, firstMaxChars = 90, laterMaxChars = 260) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim()
   if (!clean) return []
   const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean]
   const chunks = []
   let current = ''
+  let maxChars = firstMaxChars
+
+  const pushCurrent = () => {
+    if (!current) return
+    chunks.push(current)
+    current = ''
+    maxChars = laterMaxChars
+  }
+
   for (const raw of sentences) {
     const sentence = raw.trim()
     if (!sentence) continue
+
     if ((current + ' ' + sentence).trim().length <= maxChars) {
       current = (current + ' ' + sentence).trim()
       continue
     }
-    if (current) chunks.push(current)
+
+    pushCurrent()
+
     if (sentence.length <= maxChars) {
       current = sentence
       continue
     }
+
     const words = sentence.split(/\s+/)
-    current = ''
     for (const word of words) {
-      if ((current + ' ' + word).trim().length > maxChars && current) {
-        chunks.push(current)
-        current = word
-      } else {
-        current = (current + ' ' + word).trim()
-      }
+      if ((current + ' ' + word).trim().length > maxChars && current) pushCurrent()
+      current = (current + ' ' + word).trim()
     }
   }
-  if (current) chunks.push(current)
+
+  pushCurrent()
   return chunks
 }
 
@@ -95,7 +116,8 @@ self.addEventListener('message', async (event) => {
   if (data.type === 'warmup') {
     const requestId = data.requestId || 'warmup'
     try {
-      const { device } = await getTTS(requestId)
+      const { tts, device } = await getTTS(requestId)
+      await primeInference(tts)
       self.postMessage({ status: 'warmup-ready', requestId, device: device || loadedDevice, dtype: 'q8' })
     } catch (error) {
       self.postMessage({ status: 'warmup-error', requestId, message: error?.message || 'Natural voice warm-up failed.' })
@@ -125,6 +147,7 @@ self.addEventListener('message', async (event) => {
         voice: data.voice || 'bf_emma',
         speed: Number(data.speed) || 1,
       })
+      inferencePrimed = true
       if (activeRequestId !== requestId) return
       const blob = audio.toBlob()
       self.postMessage({ status: 'audio', requestId, index, blob })
