@@ -10,11 +10,33 @@ const NATURAL_VOICES = [
 ]
 
 let sharedWorker = null
+let warmupScheduled = false
+let naturalWorkerReady = false
+
 function getNaturalWorker() {
   if (!sharedWorker && typeof Worker !== 'undefined') {
     sharedWorker = new Worker(new URL('./naturalSpeechWorker.js', import.meta.url), { type: 'module' })
+    sharedWorker.addEventListener('message', (event) => {
+      const status = event.data?.status
+      if (status === 'warmup-ready' || status === 'ready') naturalWorkerReady = true
+    })
   }
   return sharedWorker
+}
+
+function scheduleNaturalWarmup() {
+  if (warmupScheduled || naturalWorkerReady || typeof window === 'undefined') return
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection
+  if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return
+  warmupScheduled = true
+
+  const start = () => {
+    const worker = getNaturalWorker()
+    if (worker && !naturalWorkerReady) worker.postMessage({ type: 'warmup', requestId: 'kellyn-natural-warmup' })
+  }
+
+  if ('requestIdleCallback' in window) window.requestIdleCallback(start, { timeout: 1500 })
+  else window.setTimeout(start, 600)
 }
 
 function saved(key, fallback) {
@@ -35,6 +57,10 @@ export default function SpeechControls({ text = '', getText, compact = false, la
   const queueRef = useRef([])
   const generationDoneRef = useRef(false)
   const urlsRef = useRef(new Set())
+
+  useEffect(() => {
+    if (engine === 'natural') scheduleNaturalWarmup()
+  }, [engine])
 
   useEffect(() => {
     if (!deviceSupported) return
@@ -101,6 +127,7 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     setEngine(value)
     try { localStorage.setItem('kellyn-speech-engine', value) } catch (_) {}
     stop(false)
+    if (value === 'natural') scheduleNaturalWarmup()
   }
 
   function rememberNaturalVoice(value) {
@@ -171,7 +198,7 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     requestRef.current = requestId
     generationDoneRef.current = false
     setState('loading')
-    setStatusText('Preparing natural voice…')
+    setStatusText(naturalWorkerReady ? 'Preparing natural voice…' : 'Loading natural voice…')
     worker.postMessage({ type: 'generate', requestId, text: value, voice: naturalVoice, speed: rate })
   }
 
@@ -273,7 +300,7 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     </label>}
     <div className="speech-status" aria-live="polite">
       <span className={engine === 'natural' ? 'speech-badge natural' : 'speech-badge'}>{engine === 'natural' ? 'Natural' : 'Device'}</span>
-      <span>{statusText || (engine === 'natural' ? 'First use downloads the free voice model to this device.' : 'Uses the voices already available on this device.')}</span>
+      <span>{statusText || (engine === 'natural' ? 'Natural voice warms up in the background and is cached on this device.' : 'Uses the voices already available on this device.')}</span>
     </div>
   </div>
 }
