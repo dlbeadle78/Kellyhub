@@ -1,4 +1,5 @@
 name: Add ChatGPT Study handoff
+# Trigger the one-time updater after the workflow exists on main.
 
 on:
   push:
