@@ -1,0 +1,73 @@
+name: Wire Phase 1 core
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase1-core-patch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch application routes and read aloud
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('src/App.jsx')
+          text=p.read_text()
+          anchor="import LearningSubjectsPage from './LearningSubjects.jsx'\n"
+          imports="import SpeechControls from './SpeechControls.jsx'\nimport Phase1Work from './Phase1Work.jsx'\nimport QuickCaptureV2 from './QuickCaptureV2.jsx'\n"
+          if "import Phase1Work from './Phase1Work.jsx'" not in text:
+              text=text.replace(anchor,anchor+imports,1)
+          old="{route==='work' && <WorkPage {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}"
+          new="{route==='work' && <Phase1Work {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}"
+          if old in text:text=text.replace(old,new,1)
+          elif new not in text:raise SystemExit('Work route not found')
+          old="{route==='capture' && <CapturePage {...common()} />}"
+          new="{route==='capture' && <QuickCaptureV2 {...common()} />}"
+          if old in text:text=text.replace(old,new,1)
+          elif new not in text:raise SystemExit('Capture route not found')
+          old='<button title="Read page aloud" onClick={()=>speak(mainRef.current?.innerText || \'\')}><Volume2/><small>Read aloud</small></button>'
+          new='<SpeechControls compact getText={()=>mainRef.current?.innerText || \'\'} label="Read aloud" />'
+          if old in text:text=text.replace(old,new,1)
+          elif new not in text:raise SystemExit('Topbar read aloud button not found')
+          p.write_text(text)
+
+          p=Path('src/LearningSubjects.jsx')
+          text=p.read_text()
+          anchor="import { LEARNING_CONTENT, LEARNING_STATUS } from './learningContent.js'\n"
+          imp="import SpeechControls from './SpeechControls.jsx'\n"
+          if imp not in text:text=text.replace(anchor,anchor+imp,1)
+          old='''<div className="learning-read-actions">\n            <button onClick={readTopic}><Volume2 size={17}/> Read topic</button>\n            <button onClick={stopSpeaking}><XCircle size={17}/> Stop</button>\n          </div>'''
+          new='''<div className="learning-read-actions">\n            <SpeechControls text={`${topic.title}. ${topic.summary}. Key ideas. ${topic.keyIdeas.join('. ')}`} label="Read topic" />\n          </div>'''
+          if old in text:text=text.replace(old,new,1)
+          elif '<SpeechControls text={`${topic.title}' not in text:raise SystemExit('Learning read controls not found')
+          p.write_text(text)
+
+          p=Path('src/styles.css')
+          text=p.read_text()
+          old=":root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;"
+          new=":root{font-family:'OpenDyslexic',Arial,sans-serif;"
+          if old in text:text=text.replace(old,new,1)
+          old=":root[data-dyslexic='true']{font-family:'OpenDyslexic',Arial,sans-serif}"
+          new=":root[data-dyslexic='false']{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}"
+          if old in text:text=text.replace(old,new,1)
+          p.write_text(text)
+      - name: Commit source patch
+        run: |
+          if git diff --quiet -- src/App.jsx src/LearningSubjects.jsx src/styles.css; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.jsx src/LearningSubjects.jsx src/styles.css
+          git commit -m "Complete Phase 1 core routes and read aloud controls"
+          git push origin main
