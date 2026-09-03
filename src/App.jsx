@@ -13,9 +13,12 @@ import QuickCaptureV2 from './QuickCaptureV2.jsx'
 import Phase1Today from './Phase1Today.jsx'
 import StuckV2 from './StuckV2.jsx'
 import Phase2Resources from './Phase2Resources.jsx'
-import Phase2Progress from './Phase2Progress.jsx'
+import Phase3Progress from './Phase3Progress.jsx'
 import Phase2Settings from './Phase2Settings.jsx'
 import NotificationManager from './NotificationManager.jsx'
+import Phase3Practice from './Phase3Practice.jsx'
+import Phase3University from './Phase3University.jsx'
+import Phase3Support from './Phase3Support.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -122,6 +125,7 @@ function AuthScreen() {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [name, setName] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -129,7 +133,7 @@ function AuthScreen() {
     e.preventDefault(); setBusy(true); setMessage('')
     const action = mode === 'login'
       ? supabase.auth.signInWithPassword({ email, password })
-      : supabase.auth.signUp({ email, password, options: { data: { display_name: 'Kellyn' } } })
+      : supabase.auth.signUp({ email, password, options: { data: { display_name: name.trim() || 'Student' } } })
     const { error } = await action
     setBusy(false)
     if (error) return setMessage(error.message)
@@ -145,6 +149,7 @@ function AuthScreen() {
       <h2>{mode === 'login' ? 'Sign in' : 'Create account'}</h2>
       <p className="muted">Your tasks, files and progress are private and stored securely.</p>
       <form onSubmit={submit} className="stack">
+        {mode==='signup' && <label>Name<input type="text" value={name} onChange={e=>setName(e.target.value)} required autoComplete="name" /></label>}
         <label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoComplete="email" /></label>
         <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} required minLength="8" autoComplete={mode==='login'?'current-password':'new-password'} /></label>
         {message && <div className="notice">{message}</div>}
@@ -160,7 +165,7 @@ function AuthScreen() {
 export default function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [route, setRoute] = useState(location.hash.replace('#/','') || 'today')
+  const [route, setRoute] = useState((location.hash.replace('#/','').split('?')[0]) || 'today')
   const [mobileNav, setMobileNav] = useState(false)
   const [profile, setProfile] = useState(null)
   const [subjects, setSubjects] = useState([])
@@ -183,7 +188,7 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false) })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => setSession(next))
-    const onHash = () => setRoute(location.hash.replace('#/','') || 'today')
+    const onHash = () => setRoute((location.hash.replace('#/','').split('?')[0]) || 'today')
     window.addEventListener('hashchange', onHash)
     return () => { sub.subscription.unsubscribe(); window.removeEventListener('hashchange', onHash) }
   }, [])
@@ -205,17 +210,17 @@ export default function App() {
     const requests = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).maybeSingle(),
       supabase.from('subjects').select('*').order('sort_order'),
-      supabase.from('tasks').select('*').order('due_at', { ascending: true, nullsFirst: false }),
-      supabase.from('task_steps').select('*').order('order_index'),
-      supabase.from('planner_events').select('*').order('starts_at'),
-      supabase.from('timetable_entries').select('*').order('day_of_week').order('start_time'),
-      supabase.from('travel_entries').select('*').eq('active', true).order('direction').order('sequence'),
-      supabase.from('evidence_bank').select('*').order('event_date', { ascending: false, nullsFirst: false }),
-      supabase.from('university_choices').select('*').order('favourite', { ascending: false }).order('university_name'),
-      supabase.from('practice_records').select('*').order('completed_at', { ascending: false }),
-      supabase.from('independent_skills').select('*').order('category').order('skill'),
-      supabase.from('quick_capture').select('*').order('created_at', { ascending: false }),
-      supabase.from('user_files').select('*').order('created_at', { ascending: false }),
+      supabase.from('tasks').select('*').eq('user_id', uid).order('due_at', { ascending: true, nullsFirst: false }),
+      supabase.from('task_steps').select('*').eq('user_id', uid).order('order_index'),
+      supabase.from('planner_events').select('*').eq('user_id', uid).order('starts_at'),
+      supabase.from('timetable_entries').select('*').eq('user_id', uid).order('day_of_week').order('start_time'),
+      supabase.from('travel_entries').select('*').eq('user_id', uid).eq('active', true).order('direction').order('sequence'),
+      supabase.from('evidence_bank').select('*').eq('user_id', uid).order('event_date', { ascending: false, nullsFirst: false }),
+      supabase.from('university_choices').select('*').eq('user_id', uid).order('favourite', { ascending: false }).order('university_name'),
+      supabase.from('practice_records').select('*').eq('user_id', uid).order('completed_at', { ascending: false }),
+      supabase.from('independent_skills').select('*').eq('user_id', uid).order('category').order('skill'),
+      supabase.from('quick_capture').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+      supabase.from('user_files').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
     ])
     const errors = requests.filter(r=>r.error).map(r=>r.error.message)
     if (errors.length) notify(errors[0])
@@ -247,7 +252,7 @@ export default function App() {
   if (loading) return <div className="loading-screen">Loading Kellyn Hub…</div>
   if (!session) return <AuthScreen />
 
-  const pageTitle = NAV.find(([key])=>key===route)?.[1] || 'Kellyn Hub'
+  const pageTitle = route==='support' ? 'Support' : (NAV.find(([key])=>key===route)?.[1] || 'Kellyn Hub')
 
   return <div className="app-shell">
     <aside className={classNames('sidebar', mobileNav && 'sidebar-open')}>
@@ -257,6 +262,7 @@ export default function App() {
       </div>
       <nav aria-label="Main navigation">
         {NAV.map(([key,label,Icon]) => <button key={key} className={classNames('nav-item', route===key && 'active', key==='stuck' && 'stuck-nav')} onClick={()=>go(key)}><Icon size={20}/><span>{label}</span></button>)}
+        {profile?.role==='admin' && <button className={classNames('nav-item', route==='support' && 'active')} onClick={()=>go('support')}><UserRound size={20}/><span>Support</span></button>}
       </nav>
       <div className="sidebar-bottom">
         <button className="nav-item" onClick={()=>go('settings')}><Settings2 size={20}/><span>Accessibility</span></button>
@@ -282,14 +288,15 @@ export default function App() {
         {route==='subjects' && <LearningSubjectsPage {...common()} />}
         {route==='work' && <Phase1Work {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
         {route==='planner' && <PlannerPage {...common()} />}
-        {route==='practice' && <PracticePage {...common()} />}
+        {route==='practice' && <Phase3Practice {...common()} />}
         {route==='ucas' && <UcasPage {...common()} />}
-        {route==='uni' && <UniversityPage {...common()} />}
-        {route==='progress' && <Phase2Progress {...common()} />}
+        {route==='uni' && <Phase3University {...common()} />}
+        {route==='progress' && <Phase3Progress {...common()} />}
         {route==='resources' && <Phase2Resources {...common()} />}
         {route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='capture' && <QuickCaptureV2 {...common()} />}
         {route==='settings' && <Phase2Settings {...common()} />}
+        {route==='support' && <Phase3Support {...common()} />}
       </main>
     </div>
     <NotificationManager session={session} timetable={timetable} tasks={tasks} steps={steps} />
