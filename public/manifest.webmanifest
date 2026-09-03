@@ -1,0 +1,10 @@
+{
+  "name": "Kellyn Hub",
+  "short_name": "Kellyn Hub",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f7fb",
+  "theme_color": "#6d4fe0",
+  "description": "Personal Year 13 learning, planning, UCAS and university preparation hub.",
+  "icons": []
+}

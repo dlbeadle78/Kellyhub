@@ -1,29 +1,66 @@
 # Kellyn Hub
 
-Kellyn Hub is a personal learning and organisation web application intended to support independent study, planning, revision, UCAS preparation, university preparation and day-to-day organisation.
+Kellyn Hub is a private personal learning and organisation web application for Kellyn’s Sixth Form Year 2 and university preparation.
 
-## Planned architecture
+## Current build
 
-- **Development:** Bolt
+The repository now contains the working application rather than a placeholder shell.
+
+Main areas:
+
+- Today dashboard
+- Subjects
+- My Work with persistent tasks and step plans
+- Secure file uploads
+- Planner, timetable and travel setup
+- Mock & Practice records
+- UCAS evidence bank and personal statement support boundaries
+- University research tracker
+- My Progress
+- WJEC resources and NotebookLM prompt support
+- I’m Stuck support flow
+- Quick Capture
+- Accessibility settings including OpenDyslexic, text size, Read Aloud, Focus Mode, dark mode and reduced motion
+- Independent living skills tracker
+
+## Architecture
+
 - **Source control:** GitHub
 - **Hosting:** Vercel
-- **Authentication, database and file storage:** Supabase
+- **Authentication, database and private file storage:** Supabase
 - **WJEC resource library:** `dlbeadle78/kellynwjec`
+- **Frontend:** React + Vite
 
-## Repository purpose
+The app uses the existing Supabase project and Row Level Security. The publishable browser key is not a secret. No service-role key, password or private token is committed.
 
-This repository is the permanent source-code home for Kellyn Hub. The application should remain portable so that the development or hosting provider can be changed later without rebuilding the project from scratch.
+## Local development
 
-## Current status
+```bash
+npm install
+npm run dev
+```
 
-Repository initialised. The full application build will be completed from the approved Kellyn Hub build specification and visual references.
+Optional environment variables:
 
-## Important security rule
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+```
 
-Do not commit passwords, API keys, private tokens, personal records, school timetable data, travel routines or other private user information to this repository. Runtime configuration must use environment variables and personal application data must be stored in the approved backend/database.
+The existing Kellyn Hub project values are used as safe publishable fallbacks so the connected Vercel deployment can run without a service secret.
 
-## Related repository
+## Build
 
-Official learning-resource material used by the Hub is maintained separately in:
+```bash
+npm run build
+```
 
-- `dlbeadle78/kellynwjec`
+Vercel should detect Vite automatically. `vercel.json` keeps the single-page application routes working.
+
+## Personal data
+
+Do not commit school timetable entries, travel routines, tasks, uploaded schoolwork, notes or other private records to GitHub. Add them inside the authenticated application so they remain in Supabase.
+
+## AI boundary
+
+Kellyn Hub may help explain, simplify, plan, quiz, support reflection and review work Kellyn has already produced. It must not write assessed coursework, fabricate evidence or create a personal statement for direct submission.
