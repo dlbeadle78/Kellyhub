@@ -1,43 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { CirclePause, CirclePlay, Sparkles, Square, Volume2 } from 'lucide-react'
+import { supabase } from './supabase.js'
 import './speech.css'
 
-const PIPER_VOICES = [
-  { id: 'en_GB-alba-medium', label: 'Alba', detail: 'British female' },
-  { id: 'en_GB-alan-medium', label: 'Alan', detail: 'British male' },
+const EDGE_VOICES = [
+  { id: 'en-GB-SoniaNeural', label: 'Sonia', detail: 'British female' },
+  { id: 'en-GB-LibbyNeural', label: 'Libby', detail: 'British female' },
+  { id: 'en-GB-RyanNeural', label: 'Ryan', detail: 'British male' },
 ]
-
-let piperModulePromise = null
-const piperDownloadPromises = new Map()
 
 function saved(key, fallback) {
   try { return localStorage.getItem(key) || fallback } catch (_) { return fallback }
 }
 
-function loadPiper() {
-  if (!piperModulePromise) piperModulePromise = import('@mintplex-labs/piper-tts-web')
-  return piperModulePromise
-}
-
-async function ensurePiperVoice(voiceId, onProgress) {
-  const piper = await loadPiper()
-  let stored = []
-  try { stored = await piper.stored() } catch (_) {}
-  if (stored.includes(voiceId)) return piper
-
-  if (!piperDownloadPromises.has(voiceId)) {
-    const promise = piper.download(voiceId, progress => {
-      const total = Number(progress?.total) || 0
-      const loaded = Number(progress?.loaded) || 0
-      if (total > 0) onProgress?.(Math.max(0, Math.min(100, Math.round((loaded / total) * 100))))
-    }).finally(() => piperDownloadPromises.delete(voiceId))
-    piperDownloadPromises.set(voiceId, promise)
-  }
-  await piperDownloadPromises.get(voiceId)
-  return piper
-}
-
-function splitText(value, maxChars = 180) {
+function splitText(value, maxChars = 300) {
   const clean = String(value || '').replace(/\s+/g, ' ').trim()
   if (!clean) return []
   const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean]
@@ -73,16 +49,20 @@ export default function SpeechControls({ text = '', getText, compact = false, la
   const deviceSupported = typeof window !== 'undefined' && 'speechSynthesis' in window
   const [deviceVoices, setDeviceVoices] = useState([])
   const [deviceVoiceName, setDeviceVoiceName] = useState('')
-  const [engine, setEngine] = useState(() => saved('kellyn-speech-engine-v2', 'natural'))
-  const [naturalVoice, setNaturalVoice] = useState(() => saved('kellyn-piper-voice', 'en_GB-alba-medium'))
+  const [engine, setEngine] = useState(() => saved('kellyn-speech-engine-v3', 'edge') === 'device' ? 'device' : 'edge')
+  const [edgeVoice, setEdgeVoice] = useState(() => saved('kellyn-edge-voice', 'en-GB-SoniaNeural'))
   const [rate, setRate] = useState(() => Number(saved('kellyn-speech-rate', '0.95')))
   const [state, setState] = useState('idle')
   const [statusText, setStatusText] = useState('')
   const audioRef = useRef(null)
   const objectUrlRef = useRef(null)
   const requestRef = useRef(0)
-  const naturalChunksRef = useRef([])
-  const naturalIndexRef = useRef(0)
+  const chunksRef = useRef([])
+  const indexRef = useRef(0)
+  const tokenRef = useRef('')
+  const fetchesRef = useRef(new Map())
+  const abortsRef = useRef(new Set())
+  const activeEngineRef = useRef(null)
 
   useEffect(() => {
     if (!deviceSupported) return
@@ -100,16 +80,6 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     return () => window.speechSynthesis.removeEventListener?.('voiceschanged', load)
   }, [deviceSupported])
 
-  useEffect(() => {
-    if (engine !== 'natural' || typeof navigator === 'undefined') return
-    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection
-    if (connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '')) return
-    const timer = window.setTimeout(() => {
-      ensurePiperVoice(naturalVoice).catch(() => {})
-    }, 900)
-    return () => window.clearTimeout(timer)
-  }, [engine, naturalVoice])
-
   useEffect(() => () => stop(false), [])
 
   const englishDeviceVoices = useMemo(() => deviceVoices.filter(v => /^en/i.test(v.lang)), [deviceVoices])
@@ -122,20 +92,19 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     const next = Number(value)
     setRate(next)
     try { localStorage.setItem('kellyn-speech-rate', String(next)) } catch (_) {}
-    if (audioRef.current) audioRef.current.playbackRate = next
   }
 
   function rememberEngine(value) {
     stop(false)
     setEngine(value)
-    try { localStorage.setItem('kellyn-speech-engine-v2', value) } catch (_) {}
+    try { localStorage.setItem('kellyn-speech-engine-v3', value) } catch (_) {}
     setStatusText('')
   }
 
-  function rememberNaturalVoice(value) {
+  function rememberEdgeVoice(value) {
     stop(false)
-    setNaturalVoice(value)
-    try { localStorage.setItem('kellyn-piper-voice', value) } catch (_) {}
+    setEdgeVoice(value)
+    try { localStorage.setItem('kellyn-edge-voice', value) } catch (_) {}
     setStatusText('')
   }
 
@@ -151,73 +120,109 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     }
   }
 
-  async function generateNaturalChunk(requestId) {
+  function cancelFetches() {
+    for (const controller of abortsRef.current) controller.abort()
+    abortsRef.current.clear()
+    fetchesRef.current.clear()
+  }
+
+  function edgeChunk(requestId, index) {
+    if (requestId !== requestRef.current || index >= chunksRef.current.length) return Promise.resolve(null)
+    if (fetchesRef.current.has(index)) return fetchesRef.current.get(index)
+
+    const controller = new AbortController()
+    abortsRef.current.add(controller)
+    const promise = fetch('/api/edge-tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${tokenRef.current}`,
+      },
+      body: JSON.stringify({
+        text: chunksRef.current[index],
+        voice: edgeVoice,
+        speed: rate,
+      }),
+      signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) throw new Error('Edge voice unavailable')
+      return response.blob()
+    }).finally(() => abortsRef.current.delete(controller))
+
+    fetchesRef.current.set(index, promise)
+    return promise
+  }
+
+  async function playEdgeChunk(requestId, index) {
     if (requestId !== requestRef.current) return
-    const chunk = naturalChunksRef.current[naturalIndexRef.current]
-    if (!chunk) {
+    if (index >= chunksRef.current.length) {
       setState('idle')
       setStatusText('')
+      activeEngineRef.current = null
       return
     }
 
     try {
       setState('loading')
-      setStatusText('Preparing natural voice…')
-      const piper = await ensurePiperVoice(naturalVoice, percent => {
-        if (requestId === requestRef.current) setStatusText(`Downloading natural voice… ${percent}%`)
-      })
-      if (requestId !== requestRef.current) return
+      setStatusText(index === 0 ? 'Connecting to Microsoft Edge voice…' : 'Preparing the next section…')
+      const blob = await edgeChunk(requestId, index)
+      if (requestId !== requestRef.current || !blob) return
 
-      setStatusText('Generating speech…')
-      const wav = await piper.predict({ text: chunk, voiceId: naturalVoice })
-      if (requestId !== requestRef.current) return
-
+      edgeChunk(requestId, index + 1).catch(() => {})
       clearAudio()
-      const url = URL.createObjectURL(wav)
+      const url = URL.createObjectURL(blob)
       objectUrlRef.current = url
       const audio = new Audio(url)
-      audio.playbackRate = Number(rate) || 1
       audioRef.current = audio
+      activeEngineRef.current = 'edge'
       audio.onplay = () => {
         if (requestId !== requestRef.current) return
         setState('speaking')
-        setStatusText('Natural voice')
+        setStatusText('Microsoft Edge neural voice')
       }
       audio.onended = () => {
         if (requestId !== requestRef.current) return
         clearAudio()
-        naturalIndexRef.current += 1
-        generateNaturalChunk(requestId)
+        indexRef.current = index + 1
+        playEdgeChunk(requestId, index + 1)
       }
       audio.onerror = () => fallbackToDevice(requestId)
       await audio.play()
-    } catch (_) {
+    } catch (error) {
+      if (error?.name === 'AbortError') return
       fallbackToDevice(requestId)
     }
   }
 
-  function fallbackToDevice(requestId) {
-    if (requestId !== requestRef.current) return
-    const value = content()
-    clearAudio()
-    setEngine('device')
-    try { localStorage.setItem('kellyn-speech-engine-v2', 'device') } catch (_) {}
-    setStatusText('Natural voice could not play correctly. Using device voice instead.')
-    setState('idle')
-    playDevice(value, true)
-  }
-
-  function playNatural(value) {
+  async function playEdge(value) {
     if (!value) return
     if (deviceSupported) window.speechSynthesis.cancel()
     clearAudio()
+    cancelFetches()
+
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token || ''
+    if (!token) return fallbackToDevice(requestRef.current, value)
+
     const chunks = splitText(value)
     if (!chunks.length) return
-    naturalChunksRef.current = chunks
-    naturalIndexRef.current = 0
+    chunksRef.current = chunks
+    indexRef.current = 0
+    tokenRef.current = token
     const requestId = Date.now() + Math.random()
     requestRef.current = requestId
-    generateNaturalChunk(requestId)
+    setState('loading')
+    setStatusText('Connecting to Microsoft Edge voice…')
+    playEdgeChunk(requestId, 0)
+  }
+
+  function fallbackToDevice(requestId, fallbackText = '') {
+    if (requestId !== requestRef.current && requestRef.current !== 0) return
+    clearAudio()
+    cancelFetches()
+    setState('idle')
+    setStatusText('Microsoft Edge voice is temporarily unavailable. Using the device voice instead.')
+    playDevice(fallbackText || content(), true)
   }
 
   function playDevice(value, preserveStatus = false) {
@@ -228,17 +233,18 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     utterance.rate = Number(rate)
     const chosen = deviceVoices.find(v => v.name === deviceVoiceName)
     if (chosen) utterance.voice = chosen
+    activeEngineRef.current = 'device'
     utterance.onstart = () => { setState('speaking'); if (!preserveStatus) setStatusText('Device voice') }
-    utterance.onend = () => { setState('idle'); setStatusText('') }
-    utterance.onerror = () => { setState('idle'); setStatusText('') }
+    utterance.onend = () => { setState('idle'); setStatusText(''); activeEngineRef.current = null }
+    utterance.onerror = () => { setState('idle'); setStatusText(''); activeEngineRef.current = null }
     window.speechSynthesis.speak(utterance)
   }
 
   function play() {
     if (state === 'paused') {
-      if (engine === 'natural' && audioRef.current) {
+      if (activeEngineRef.current === 'edge' && audioRef.current) {
         audioRef.current.play().then(() => setState('speaking')).catch(() => {})
-      } else if (engine === 'device' && deviceSupported) {
+      } else if (activeEngineRef.current === 'device' && deviceSupported) {
         window.speechSynthesis.resume()
         setState('speaking')
       }
@@ -246,19 +252,19 @@ export default function SpeechControls({ text = '', getText, compact = false, la
     }
     const value = content()
     if (!value) return
-    if (engine === 'natural') playNatural(value)
+    if (engine === 'edge') playEdge(value)
     else playDevice(value)
   }
 
   function pause() {
     if (state !== 'speaking') return
-    if (engine === 'natural' && audioRef.current) {
+    if (activeEngineRef.current === 'edge' && audioRef.current) {
       audioRef.current.pause()
       setState('paused')
       setStatusText('Paused')
       return
     }
-    if (engine === 'device' && deviceSupported && window.speechSynthesis.speaking) {
+    if (activeEngineRef.current === 'device' && deviceSupported && window.speechSynthesis.speaking) {
       window.speechSynthesis.pause()
       setState('paused')
       setStatusText('Paused')
@@ -268,9 +274,12 @@ export default function SpeechControls({ text = '', getText, compact = false, la
   function stop(updateState = true) {
     requestRef.current += 1
     clearAudio()
+    cancelFetches()
     if (deviceSupported) window.speechSynthesis.cancel()
-    naturalChunksRef.current = []
-    naturalIndexRef.current = 0
+    chunksRef.current = []
+    indexRef.current = 0
+    tokenRef.current = ''
+    activeEngineRef.current = null
     if (updateState) {
       setState('idle')
       setStatusText('')
@@ -283,20 +292,20 @@ export default function SpeechControls({ text = '', getText, compact = false, la
   if (!deviceSupported && engine === 'device') return <div className="speech-unsupported">Read aloud is not supported on this device.</div>
 
   if (compact) return <div className="speech-controls speech-controls-compact" aria-label="Read aloud controls">
-    <button type="button" onClick={play} disabled={busy} title={engine === 'natural' ? 'Read with natural voice' : label}>{state === 'paused' ? <CirclePlay/> : engine === 'natural' ? <Sparkles/> : <Volume2/>}<small>{playLabel}</small></button>
+    <button type="button" onClick={play} disabled={busy} title={engine === 'edge' ? 'Read with Microsoft Edge neural voice' : label}>{state === 'paused' ? <CirclePlay/> : engine === 'edge' ? <Sparkles/> : <Volume2/>}<small>{playLabel}</small></button>
     <button type="button" onClick={pause} disabled={state !== 'speaking'} title="Pause reading"><CirclePause/><small>Pause</small></button>
     <button type="button" onClick={()=>stop()} disabled={state === 'idle'} title="Stop reading"><Square/><small>Stop</small></button>
   </div>
 
   return <div className="speech-controls speech-controls-full" aria-label="Read aloud controls">
     <div className="speech-buttons">
-      <button type="button" onClick={play} disabled={busy}>{state === 'paused' ? <CirclePlay size={18}/> : engine === 'natural' ? <Sparkles size={18}/> : <Volume2 size={18}/>} {playLabel}</button>
+      <button type="button" onClick={play} disabled={busy}>{state === 'paused' ? <CirclePlay size={18}/> : engine === 'edge' ? <Sparkles size={18}/> : <Volume2 size={18}/>} {playLabel}</button>
       <button type="button" onClick={pause} disabled={state !== 'speaking'}><CirclePause size={18}/> Pause</button>
       <button type="button" onClick={()=>stop()} disabled={state === 'idle'}><Square size={16}/> Stop</button>
     </div>
     <label>Voice type
       <select value={engine} onChange={e => rememberEngine(e.target.value)}>
-        <option value="natural">Natural voice</option>
+        <option value="edge">Microsoft Edge neural</option>
         <option value="device">Device voice</option>
       </select>
     </label>
@@ -305,9 +314,9 @@ export default function SpeechControls({ text = '', getText, compact = false, la
         <option value="0.75">Slow</option><option value="0.9">Comfortable</option><option value="0.95">Natural</option><option value="1">Normal</option><option value="1.12">Faster</option>
       </select>
     </label>
-    {engine === 'natural' ? <label>Voice
-      <select value={naturalVoice} onChange={e => rememberNaturalVoice(e.target.value)}>
-        {PIPER_VOICES.map(v => <option key={v.id} value={v.id}>{v.label} · {v.detail}</option>)}
+    {engine === 'edge' ? <label>Voice
+      <select value={edgeVoice} onChange={e => rememberEdgeVoice(e.target.value)}>
+        {EDGE_VOICES.map(v => <option key={v.id} value={v.id}>{v.label} · {v.detail}</option>)}
       </select>
     </label> : <label>Voice
       <select value={deviceVoiceName} onChange={e => setDeviceVoiceName(e.target.value)}>
@@ -315,8 +324,8 @@ export default function SpeechControls({ text = '', getText, compact = false, la
       </select>
     </label>}
     <div className="speech-status" aria-live="polite">
-      <span className={engine === 'natural' ? 'speech-badge natural' : 'speech-badge'}>{engine === 'natural' ? 'Natural' : 'Device'}</span>
-      <span>{statusText || (engine === 'natural' ? 'Piper natural voice. The voice downloads once, then is stored on this device for future use.' : 'Uses the reliable voice already available on this device.')}</span>
+      <span className={engine === 'edge' ? 'speech-badge natural' : 'speech-badge'}>{engine === 'edge' ? 'Edge Neural' : 'Device'}</span>
+      <span>{statusText || (engine === 'edge' ? 'Fast online natural speech with no voice-model download. Text is sent to Microsoft only to generate the spoken audio.' : 'Uses the voice already available on this device.')}</span>
     </div>
   </div>
 }
