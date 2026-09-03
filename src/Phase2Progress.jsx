@@ -7,18 +7,40 @@ import './phase2-progress.css'
 function weekForDate(value){const anchor=new Date(2026,7,31);anchor.setHours(0,0,0,0);const d=new Date(value);d.setHours(0,0,0,0);const w=Math.floor((d-anchor)/604800000);return (((w%2)+2)%2)+1}
 function mondayIndex(date){return ((date.getDay()+6)%7)+1}
 function fmt(value){return new Intl.DateTimeFormat('en-GB',{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).format(new Date(value))}
-function nextFreeSlots(timetable=[],events=[]){const slots=[];const now=new Date();for(let offset=0;offset<14&&slots.length<6;offset++){const d=new Date(now);d.setDate(now.getDate()+offset);const day=mondayIndex(d);if(day>5)continue;const week=weekForDate(d);for(const row of timetable.filter(x=>x.day_of_week===day&&(x.week_number||1)===week&&x.entry_type==='free')){const [h,m]=row.start_time.split(':').map(Number);const [eh,em]=row.end_time.split(':').map(Number);const start=new Date(d);start.setHours(h,m,0,0);const end=new Date(d);end.setHours(eh,em,0,0);if(start<=now)continue;const clash=events.some(e=>new Date(e.starts_at)<end&&new Date(e.ends_at||e.starts_at)>start);if(!clash)slots.push({start,end,label:`${fmt(start)} · free period`})}}
-return slots}
+function statusRank(status){return ({needs_review:0,developing:1,not_started:2,confident:4})[status]??3}
+function nextFreeSlots(timetable=[],events=[]){
+  const slots=[];const now=new Date()
+  for(let offset=0;offset<14&&slots.length<6;offset++){
+    const d=new Date(now);d.setDate(now.getDate()+offset);const day=mondayIndex(d);if(day>5)continue;const week=weekForDate(d)
+    for(const row of timetable.filter(x=>x.day_of_week===day&&(x.week_number||1)===week&&x.entry_type==='free')){
+      const [h,m]=row.start_time.split(':').map(Number);const [eh,em]=row.end_time.split(':').map(Number)
+      const start=new Date(d);start.setHours(h,m,0,0);const end=new Date(d);end.setHours(eh,em,0,0);if(start<=now)continue
+      const clash=events.some(e=>new Date(e.starts_at)<end&&new Date(e.ends_at||e.starts_at)>start);if(!clash)slots.push({start,end,label:`${fmt(start)} · free period`})
+    }
+  }
+  return slots
+}
 function flattenLearning(){const out=[];for(const [subjectSlug,content] of Object.entries(LEARNING_CONTENT))for(const unit of content.units||[])for(const topic of unit.topics||[])out.push({subjectSlug,unitSlug:unit.slug,unitTitle:unit.title,topicSlug:topic.slug,title:topic.title,time:topic.time||25});return out}
 
 export default function Phase2Progress({session,subjects=[],tasks=[],practice=[],skills=[],timetable=[],events=[],notify,go}){
   const [learning,setLearning]=useState([]),[recs,setRecs]=useState([]),[busy,setBusy]=useState('')
   useEffect(()=>{if(!session?.user?.id)return;Promise.all([supabase.from('learning_progress').select('*').eq('user_id',session.user.id),supabase.from('revision_recommendations').select('*').eq('user_id',session.user.id).order('created_at',{ascending:false})]).then(([a,b])=>{if(a.error)notify?.(a.error.message);else setLearning(a.data||[]);if(b.error)notify?.(b.error.message);else setRecs(b.data||[])})},[session?.user?.id])
-  const subjectNames=Object.fromEntries(subjects.map(s=>[s.slug,s.short_name]));const progressMap=useMemo(()=>new Map(learning.map(r=>[`${r.subject_slug}:${r.unit_slug}:${r.topic_slug}`,r])),[learning]);const topics=useMemo(()=>flattenLearning(),[])
-  const recommended=useMemo(()=>topics.map(t=>({...t,status:progressMap.get(`${t.subjectSlug}:${t.unitSlug}:${t.topicSlug}`)?.status||'not_started'})).sort((a,b)=>({needs_review:0,developing:1,not_started:2,confident:4}[a.status]-({needs_review:0,developing:1,not_started:2,confident:4}[b.status])).slice(0,5),[progressMap,topics])
+  const subjectNames=Object.fromEntries(subjects.map(s=>[s.slug,s.short_name]))
+  const progressMap=useMemo(()=>new Map(learning.map(r=>[`${r.subject_slug}:${r.unit_slug}:${r.topic_slug}`,r])),[learning])
+  const topics=useMemo(()=>flattenLearning(),[])
+  const recommended=useMemo(()=>topics.map(t=>({...t,status:progressMap.get(`${t.subjectSlug}:${t.unitSlug}:${t.topicSlug}`)?.status||'not_started'})).sort((a,b)=>statusRank(a.status)-statusRank(b.status)).slice(0,5),[progressMap,topics])
   const slots=useMemo(()=>nextFreeSlots(timetable,events),[timetable,events]);const weekAgo=Date.now()-7*86400000
-  const columns=[['not_started','To do'],['started','Started'],['nearly_finished','Nearly there']];const finished=tasks.filter(t=>t.status==='completed'&&new Date(t.updated_at||t.created_at).getTime()>=weekAgo)
-  async function plan(topic,slot){setBusy(topic.topicSlug);const start=slot?.start||new Date(Date.now()+86400000);if(!slot){start.setHours(18,0,0,0)}const mins=Math.max(20,Math.min(45,topic.time||25));const end=new Date(start.getTime()+mins*60000);const title=`${subjectNames[topic.subjectSlug]||topic.subjectSlug}: ${topic.title}`;const reason=topic.status==='needs_review'?'You marked this as needing another look.':topic.status==='developing'?'You are getting there; one retrieval session should strengthen it.':'This topic has not been started in the Hub yet.';const {error:e1}=await supabase.from('planner_events').insert({user_id:session.user.id,title,category:'revision',subject_slug:topic.subjectSlug,starts_at:start.toISOString(),ends_at:end.toISOString(),notes:`Revision route: 1) A-level depth 10 min. 2) Recall without revealing answers 10 min. 3) Try one application/evaluation task. Reason: ${reason}`});if(e1){setBusy('');return notify?.(e1.message)}const {data,error}=await supabase.from('revision_recommendations').insert({user_id:session.user.id,subject_slug:topic.subjectSlug,unit_slug:topic.unitSlug,topic_slug:topic.topicSlug,title,reason,estimated_minutes:mins,status:'planned',planned_for:start.toISOString()}).select().single();setBusy('');if(error)return notify?.(error.message);setRecs(cur=>[data,...cur]);notify?.(`Revision planned for ${fmt(start)}.`)}
+  const columns=[['not_started','To do'],['started','Started'],['nearly_finished','Nearly there']]
+  const finished=tasks.filter(t=>t.status==='completed'&&new Date(t.updated_at||t.created_at).getTime()>=weekAgo)
+  async function plan(topic,slot){
+    setBusy(topic.topicSlug);const start=slot?new Date(slot.start):new Date(Date.now()+86400000);if(!slot)start.setHours(18,0,0,0)
+    const mins=Math.max(20,Math.min(45,topic.time||25));const end=new Date(start.getTime()+mins*60000);const title=`${subjectNames[topic.subjectSlug]||topic.subjectSlug}: ${topic.title}`
+    const reason=topic.status==='needs_review'?'You marked this as needing another look.':topic.status==='developing'?'You are getting there; one retrieval session should strengthen it.':'This topic has not been started in the Hub yet.'
+    const {error:e1}=await supabase.from('planner_events').insert({user_id:session.user.id,title,category:'revision',subject_slug:topic.subjectSlug,starts_at:start.toISOString(),ends_at:end.toISOString(),notes:`Revision route: 1) A-level depth 10 min. 2) Recall without revealing answers 10 min. 3) Try one application/evaluation task. Reason: ${reason}`})
+    if(e1){setBusy('');return notify?.(e1.message)}
+    const {data,error}=await supabase.from('revision_recommendations').insert({user_id:session.user.id,subject_slug:topic.subjectSlug,unit_slug:topic.unitSlug,topic_slug:topic.topicSlug,title,reason,estimated_minutes:mins,status:'planned',planned_for:start.toISOString()}).select().single();setBusy('')
+    if(error)return notify?.(error.message);setRecs(cur=>[data,...cur]);notify?.(`Revision planned for ${fmt(start)}.`)
+  }
   const confident=learning.filter(r=>r.status==='confident').length;const developing=learning.filter(r=>r.status==='developing').length;const needs=learning.filter(r=>r.status==='needs_review').length
   return <div className="p2p-shell">
     <section className="p2p-head"><div><span>My Progress</span><h2>See what is moving, then choose the next useful action.</h2><p>Completed work stays visible. Learning confidence feeds directly into revision suggestions.</p></div><div className="p2p-metrics"><div><strong>{confident}</strong><span>topics confident</span></div><div><strong>{developing}</strong><span>getting there</span></div><div><strong>{needs}</strong><span>need another look</span></div></div></section>
