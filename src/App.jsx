@@ -19,6 +19,7 @@ import NotificationManager from './NotificationManager.jsx'
 import Phase3Practice from './Phase3Practice.jsx'
 import Phase3University from './Phase3University.jsx'
 import Phase3Support from './Phase3Support.jsx'
+import WeeklyPlanner from './WeeklyPlanner.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -288,7 +289,7 @@ export default function App() {
         {route==='today' && <Phase1Today {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='subjects' && <LearningSubjectsPage {...common()} />}
         {route==='work' && <Phase1Work {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
-        {route==='planner' && <PlannerPage {...common()} />}
+        {route==='planner' && <WeeklyPlanner {...common()} />}
         {route==='practice' && <Phase3Practice {...common()} />}
         {route==='ucas' && <UcasPage {...common()} />}
         {route==='uni' && <Phase3University {...common()} />}
