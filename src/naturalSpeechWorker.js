@@ -2,6 +2,7 @@ import { KokoroTTS } from 'kokoro-js'
 
 let ttsPromise = null
 let activeRequestId = null
+let loadedDevice = null
 
 async function detectDevice() {
   try {
@@ -13,23 +14,44 @@ async function detectDevice() {
   return 'wasm'
 }
 
+async function loadTTS(requestId) {
+  const preferredDevice = await detectDevice()
+  self.postMessage({ status: 'loading', requestId, device: preferredDevice, dtype: 'q8' })
+  const modelId = 'onnx-community/Kokoro-82M-v1.0-ONNX'
+
+  try {
+    const tts = await KokoroTTS.from_pretrained(modelId, {
+      dtype: 'q8',
+      device: preferredDevice,
+    })
+    loadedDevice = preferredDevice
+    return { tts, device: preferredDevice }
+  } catch (error) {
+    if (preferredDevice !== 'wasm') {
+      self.postMessage({ status: 'loading', requestId, device: 'wasm', dtype: 'q8' })
+      const tts = await KokoroTTS.from_pretrained(modelId, {
+        dtype: 'q8',
+        device: 'wasm',
+      })
+      loadedDevice = 'wasm'
+      return { tts, device: 'wasm' }
+    }
+    throw error
+  }
+}
+
 async function getTTS(requestId) {
   if (!ttsPromise) {
-    ttsPromise = (async () => {
-      const device = await detectDevice()
-      self.postMessage({ status: 'loading', requestId, device })
-      const modelId = 'onnx-community/Kokoro-82M-v1.0-ONNX'
-      const tts = await KokoroTTS.from_pretrained(modelId, {
-        dtype: device === 'webgpu' ? 'fp32' : 'q8',
-        device,
-      })
-      return { tts, device }
-    })()
+    ttsPromise = loadTTS(requestId).catch((error) => {
+      ttsPromise = null
+      loadedDevice = null
+      throw error
+    })
   }
   return ttsPromise
 }
 
-function splitText(text, maxChars = 520) {
+function splitText(text, maxChars = 300) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim()
   if (!clean) return []
   const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean]
@@ -64,10 +86,23 @@ function splitText(text, maxChars = 520) {
 
 self.addEventListener('message', async (event) => {
   const data = event.data || {}
+
   if (data.type === 'cancel') {
     if (!data.requestId || activeRequestId === data.requestId) activeRequestId = null
     return
   }
+
+  if (data.type === 'warmup') {
+    const requestId = data.requestId || 'warmup'
+    try {
+      const { device } = await getTTS(requestId)
+      self.postMessage({ status: 'warmup-ready', requestId, device: device || loadedDevice, dtype: 'q8' })
+    } catch (error) {
+      self.postMessage({ status: 'warmup-error', requestId, message: error?.message || 'Natural voice warm-up failed.' })
+    }
+    return
+  }
+
   if (data.type !== 'generate') return
 
   const requestId = data.requestId
@@ -76,7 +111,7 @@ self.addEventListener('message', async (event) => {
   try {
     const { tts, device } = await getTTS(requestId)
     if (activeRequestId !== requestId) return
-    self.postMessage({ status: 'ready', requestId, device })
+    self.postMessage({ status: 'ready', requestId, device, dtype: 'q8' })
 
     const chunks = splitText(data.text)
     if (!chunks.length) {
