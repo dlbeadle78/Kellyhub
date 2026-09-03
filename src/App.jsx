@@ -6,6 +6,7 @@ import {
   Upload, UserRound, Volume2, X, FileText, University, Brain, ShieldCheck
 } from 'lucide-react'
 import { supabase } from './supabase.js'
+import LearningSubjectsPage from './LearningSubjects.jsx'
 
 const NAV = [
   ['today', 'Today', Home],
@@ -269,7 +270,7 @@ export default function App() {
 
       <main ref={mainRef} className="main-content" tabIndex="-1">
         {route==='today' && <TodayPage {...common()} />}
-        {route==='subjects' && <SubjectsPage {...common()} />}
+        {route==='subjects' && <LearningSubjectsPage {...common()} />}
         {route==='work' && <WorkPage {...common()} selectedTaskId={selectedTaskId} setSelectedTaskId={setSelectedTaskId} />}
         {route==='planner' && <PlannerPage {...common()} />}
         {route==='practice' && <PracticePage {...common()} />}
