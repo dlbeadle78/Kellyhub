@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react'
 import {BookOpen,CheckSquare,FolderOpen,Target} from 'lucide-react'
 import {supabase} from './supabase.js'
+import {chunkKnowledge,suggestKnowledgeClassification} from './libraryKnowledge.js'
 import './capture-purpose-router.css'
 
 function captureSource(c){
@@ -12,13 +13,6 @@ function captureText(c){
   let value=String(c?.content||'').replace(/(?:^|\n)Source:\s*https?:\/\/[^\s]+/ig,'').trim()
   if(/^https?:\/\/\S+$/i.test(value))value=''
   return value||null
-}
-function chunkText(value,max=1200){
-  const text=String(value||'').trim();if(!text)return []
-  const chunks=[];let rest=text
-  while(rest.length>max){let cut=rest.lastIndexOf(' ',max);if(cut<max*.6)cut=max;chunks.push(rest.slice(0,cut).trim());rest=rest.slice(cut).trim()}
-  if(rest)chunks.push(rest)
-  return chunks.slice(0,30)
 }
 function suggestion(c){
   if(c?.suggested_type==='teacher_feedback')return'improve'
@@ -41,18 +35,29 @@ export default function CapturePurposeRouter({capture,files=[],session,notify,lo
   async function route(purpose){
     if(!uid||items.some(x=>x.purpose===purpose))return
     setBusy(purpose)
-    const subjectSlug=capture.subject_slug||capture.suggested_subject_slug||null
+    const subjectHint=capture.subject_slug||capture.suggested_subject_slug||null
     const sourceUrl=captureSource(capture)
     const extracted=captureText(capture)
     const title=capture.title||attached[0]?.original_name||'Captured resource'
-    const summary=extracted?extracted.slice(0,500):`Original ${capture.capture_type||'capture'} saved in Kellyn Hub.`
-    const {data:item,error:itemError}=await supabase.from('library_items').insert({user_id:uid,capture_id:capture.id,subject_slug:subjectSlug,title,purpose,resource_type:capture.suggested_type||capture.capture_type||'resource',source_url:sourceUrl,summary,extracted_text:extracted}).select().single()
+    const classification=extracted?suggestKnowledgeClassification(extracted,title,subjectHint):{subject_slug:subjectHint,unit_slug:null,topic_slug:null,tags:[]}
+    const subjectSlug=subjectHint||classification.subject_slug||null
+    const summary=extracted?extracted.replace(/\s+/g,' ').trim().slice(0,650):`Original ${capture.capture_type||'capture'} saved in Kellyn Hub.`
+    const now=new Date().toISOString()
+    const {data:item,error:itemError}=await supabase.from('library_items').insert({
+      user_id:uid,capture_id:capture.id,subject_slug:subjectSlug,title,purpose,
+      resource_type:capture.suggested_type||capture.capture_type||'resource',source_url:sourceUrl,summary,extracted_text:extracted,
+      extraction_status:extracted?'needs_review':'pending',extraction_method:extracted?'captured_text':null,extracted_at:extracted?now:null,
+      classification_status:'suggested',suggested_subject_slug:classification.subject_slug,suggested_unit_slug:classification.unit_slug,suggested_topic_slug:classification.topic_slug,tags:classification.tags||[]
+    }).select().single()
     if(itemError){setBusy('');return notify?.(itemError.message)}
     let finalItem=item
 
     if(extracted){
-      const chunks=chunkText(extracted).map((content,index)=>({user_id:uid,library_item_id:item.id,chunk_index:index,content,source_label:title}))
-      if(chunks.length){const {error}=await supabase.from('library_chunks').insert(chunks);if(error)notify?.('Saved to Library, but searchable text could not be prepared yet.')}
+      const chunks=chunkKnowledge(extracted).map((content,index)=>({user_id:uid,library_item_id:item.id,chunk_index:index,content,source_label:title}))
+      for(let i=0;i<chunks.length;i+=100){
+        const {error}=await supabase.from('library_chunks').insert(chunks.slice(i,i+100))
+        if(error){notify?.('Saved to Library, but searchable text could not be prepared yet.');break}
+      }
     }
 
     if(purpose==='do'){
@@ -73,7 +78,7 @@ export default function CapturePurposeRouter({capture,files=[],session,notify,lo
       if(error)notify?.('Saved to Library, but the feedback target could not be created.')
     }
 
-    await supabase.from('quick_capture').update({library_status:'partly_processed',library_processed_at:new Date().toISOString()}).eq('id',capture.id).eq('user_id',uid)
+    await supabase.from('quick_capture').update({library_status:'partly_processed',library_processed_at:now}).eq('id',capture.id).eq('user_id',uid)
     setItems(current=>[finalItem,...current])
     setBusy('')
     await loadAll?.()
