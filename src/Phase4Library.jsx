@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react'
 import {Archive,BookOpen,CheckCircle2,CheckSquare,ExternalLink,File,FolderOpen,Image,RefreshCw,ScanText,Search,Target} from 'lucide-react'
 import {supabase} from './supabase.js'
 import {chunkKnowledge,suggestKnowledgeClassification,topicLabel,topicsForUnit,unitLabel,unitsForSubject} from './libraryKnowledge.js'
+import AskLibraryPanel from './AskLibraryPanel.jsx'
 import './phase4-library.css'
 
 const PURPOSES={
@@ -206,6 +207,8 @@ export default function Phase4Library({session,subjects=[],files=[],notify,go}){
       <div><span>Kellyn's Learning Library</span><h2>Everything useful, connected back to the original.</h2><p>Teacher handouts, screenshots, web pages, PDFs, notes, tasks and feedback can live here instead of disappearing into a capture list. Read saved resources, check where they belong, then search the knowledge inside them.</p></div>
       <button onClick={()=>go?.('capture')}><FolderOpen/> Add or process captures</button>
     </section>
+
+    <AskLibraryPanel session={session} subjects={subjects} files={files} notify={notify}/>
 
     <section className="library-purpose-grid">{Object.entries(PURPOSES).map(([key,meta])=>{const Icon=meta.icon;return <button key={key} className={purpose===key?'active':''} onClick={()=>setPurpose(purpose===key?'all':key)}><Icon/><span><strong>{meta.label}</strong><small>{meta.help}</small></span><b>{counts[key]||0}</b></button>})}</section>
 
