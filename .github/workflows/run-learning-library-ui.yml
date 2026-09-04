@@ -16,12 +16,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
       - name: Apply patch
-        run: node scripts/apply-learning-library-ui.mjs
+        run: node scripts/wire-learning-library.mjs
       - name: Commit changes
         run: |
           git config user.name "dlbeadle78"
           git config user.email "dlbeadle@icloud.com"
-          git add src/App.jsx src/QuickCaptureV2.jsx src/quick-capture.css
+          git add src/App.jsx src/QuickCaptureV2.jsx
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Wire captures into Learning Library"
           git push
