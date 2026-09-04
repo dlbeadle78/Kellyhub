@@ -69,7 +69,7 @@ router=replaceOnce(router,
 "  let value=String(c?.extracted_text||c?.content||'').replace(/(?:^|\\n)Source:\\s*https?:\\/\\/[^\\s]+/ig,'').trim()",
 'router extracted text preference')
 router=replaceOnce(router,
-"    const {data:item,error:itemError}=await supabase.from('library_items').insert({user_id:uid,capture_id:capture.id,subject_slug:subjectSlug,title,purpose,resource_type:capture.suggested_type||capture.capture_type||'resource',source_url:sourceUrl,summary,extracted_text:extracted}).select().single()",
-"    const {data:item,error:itemError}=await supabase.from('library_items').insert({user_id:uid,capture_id:capture.id,subject_slug:subjectSlug,title,purpose,resource_type:capture.suggested_type||capture.capture_type||'resource',source_url:sourceUrl,summary,extracted_text:extracted,extraction_status:extracted?'needs_review':'pending',extraction_method:capture.extraction_method||(extracted?'captured_text':null),extracted_at:extracted?(capture.extracted_at||new Date().toISOString()):null,suggested_subject_slug:capture.suggested_subject_slug||null}).select().single()",
-'router extraction metadata')
+"      extraction_status:extracted?'needs_review':'pending',extraction_method:extracted?'captured_text':null,extracted_at:extracted?now:null,",
+"      extraction_status:extracted?'needs_review':'pending',extraction_method:capture.extraction_method||(extracted?'captured_text':null),extracted_at:extracted?(capture.extracted_at||now):null,",
+'router extraction method')
 fs.writeFileSync('src/CapturePurposeRouter.jsx',router)
