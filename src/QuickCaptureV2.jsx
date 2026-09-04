@@ -52,6 +52,7 @@ async function enhanceImage(file){
 export default function QuickCaptureV2({session,subjects=[],captures=[],files=[],loadAll,notify}){
   const [queued,setQueued]=useState([]),[title,setTitle]=useState(''),[subject,setSubject]=useState(''),[note,setNote]=useState('')
   const [busy,setBusy]=useState(false),[drag,setDrag]=useState(false),[enhance,setEnhance]=useState(true),[accepted,setAccepted]=useState(false)
+  const [openingFileId,setOpeningFileId]=useState(null)
   const inputRef=useRef(null),cameraRef=useRef(null)
   const suggestion=useMemo(()=>classify(title,note,queued),[title,note,queued])
 
@@ -69,6 +70,18 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
   function addFiles(list){setQueued(current=>[...current,...Array.from(list||[])])}
   function removeFile(index){setQueued(current=>current.filter((_,i)=>i!==index))}
   function acceptSuggestion(){if(suggestion.subject)setSubject(suggestion.subject);setAccepted(true)}
+
+  async function openAttachment(file){
+    if(!file?.storage_path)return notify?.('This capture does not have a stored file to open.')
+    setOpeningFileId(file.id)
+    const preview=window.open('about:blank','_blank')
+    if(preview){preview.opener=null;preview.document.title='Opening capture…'}
+    const {data,error}=await supabase.storage.from('user-files').createSignedUrl(file.storage_path,600)
+    setOpeningFileId(null)
+    if(error||!data?.signedUrl){if(preview)preview.close();return notify?.(error?.message||'Could not open this capture.')}
+    if(preview)preview.location.replace(data.signedUrl)
+    else window.open(data.signedUrl,'_blank','noopener,noreferrer')
+  }
 
   async function save(e){
     e.preventDefault();if(!queued.length&&!note.trim())return notify?.('Add a note, link, screenshot or file first.');setBusy(true)
@@ -102,12 +115,15 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
       <aside className="qc-side">
         <section className="qc-extension">
           <div className="qc-extension-head"><span className="qc-extension-icon"><Download/></span><div><span>Chrome extension</span><h2>Capture from Teams & websites</h2></div></div>
-          <p>Select a Teams post, teacher instructions, a web page or a useful link and send it straight into Quick Capture. Kellyn reviews everything before it is saved.</p>
+          <p>Capture a visible screenshot, selected Teams text, teacher instructions, a web page or a useful link and send it straight into Quick Capture. Kellyn reviews everything before it is saved.</p>
           <div className="qc-extension-actions"><a href={EXTENSION_DOWNLOAD}><Download size={16}/> Download extension</a><a href={EXTENSION_GUIDE} target="_blank" rel="noreferrer">Install guide <ExternalLink size={15}/></a></div>
           <ol><li>Download and unzip <strong>Kellyhub-main</strong>.</li><li>Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong>.</li><li>Choose <strong>Load unpacked</strong> and select the <code>chrome-extension</code> folder.</li><li>Pin <strong>Add to Kellyn Hub</strong> in Chrome.</li></ol>
           <small>Works with Teams in the browser, WJEC pages and other school websites. The extension only captures when Kellyn chooses an action.</small>
         </section>
-        <section className="qc-recent"><h2>Recent captures</h2>{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div><strong>{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p>{c.content}</p>}{attached.length>0&&<span className="qc-attachments">{attached.length} file{attached.length===1?'':'s'} attached</span>}</div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</section>
+        <section className="qc-recent">
+          <div className="qc-recent-head"><div><h2>Recent captures</h2><p>Open saved screenshots and files directly from here.</p></div></div>
+          <div className="qc-recent-list">{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div className="qc-recent-body"><strong className="qc-recent-title">{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p className="qc-recent-content">{c.content}</p>}{attached.length>0&&<div className="qc-attachment-actions">{attached.map((file,index)=>{const isImage=(file.mime_type||'').startsWith('image/');return <button type="button" key={file.id||file.storage_path} onClick={()=>openAttachment(file)} disabled={openingFileId===file.id}><ExternalLink size={14}/><span>{openingFileId===file.id?'Opening…':isImage?'View screenshot':attached.length>1?`Open file ${index+1}`:'Open file'}</span></button>})}</div>}</div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</div>
+        </section>
       </aside>
     </div>
   </div>
