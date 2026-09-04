@@ -209,9 +209,12 @@ export default function App() {
   async function loadAll() {
     if (!session?.user) return
     setRefreshing(true)
-    const uid = session.user.id
+    const authUid = session.user.id
+    const profileRequest = await supabase.from('profiles').select('*').eq('id', authUid).maybeSingle()
+    if (profileRequest.error) notify(profileRequest.error.message)
+    const nextProfile = profileRequest.data
+    const uid = nextProfile?.workspace_owner_id || authUid
     const requests = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', uid).maybeSingle(),
       supabase.from('subjects').select('*').order('sort_order'),
       supabase.from('tasks').select('*').eq('user_id', uid).order('due_at', { ascending: true, nullsFirst: false }),
       supabase.from('task_steps').select('*').eq('user_id', uid).order('order_index'),
@@ -227,19 +230,19 @@ export default function App() {
     ])
     const errors = requests.filter(r=>r.error).map(r=>r.error.message)
     if (errors.length) notify(errors[0])
-    setProfile(requests[0].data)
-    setSubjects(requests[1].data || [])
-    setTasks(requests[2].data || [])
-    setSteps(requests[3].data || [])
-    setEvents(requests[4].data || [])
-    setTimetable(requests[5].data || [])
-    setTravel(requests[6].data || [])
-    setEvidence(requests[7].data || [])
-    setUniversities(requests[8].data || [])
-    setPractice(requests[9].data || [])
-    setSkills(requests[10].data || [])
-    setCaptures(requests[11].data || [])
-    setFiles(requests[12].data || [])
+    setProfile(nextProfile)
+    setSubjects(requests[0].data || [])
+    setTasks(requests[1].data || [])
+    setSteps(requests[2].data || [])
+    setEvents(requests[3].data || [])
+    setTimetable(requests[4].data || [])
+    setTravel(requests[5].data || [])
+    setEvidence(requests[6].data || [])
+    setUniversities(requests[7].data || [])
+    setPractice(requests[8].data || [])
+    setSkills(requests[9].data || [])
+    setCaptures(requests[10].data || [])
+    setFiles(requests[11].data || [])
     setRefreshing(false)
   }
 
@@ -254,6 +257,9 @@ export default function App() {
 
   if (loading) return <div className="loading-screen">Loading Kellyn Hub…</div>
   if (!session) return <AuthScreen />
+
+  const dataOwnerId = profile?.workspace_owner_id || session.user.id
+  const workspaceSession = dataOwnerId === session.user.id ? session : { ...session, user: { ...session.user, id: dataOwnerId } }
 
   const pageTitle = route==='support' ? 'Support' : (NAV.find(([key])=>key===route)?.[1] || 'Kellyn Hub')
 
@@ -300,7 +306,7 @@ export default function App() {
         {route==='resources' && <Phase2Resources {...common()} />}
         {route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='capture' && <QuickCaptureV2 {...common()} />}
-        {route==='settings' && <Phase2Settings {...common()} />}
+        {route==='settings' && <Phase2Settings {...common()} session={session} workspaceOwnerId={dataOwnerId} />}
         {route==='support' && <Phase3Support {...common()} />}
       </main>
     </div>
@@ -309,7 +315,7 @@ export default function App() {
   </div>
 
   function common() {
-    return { session, profile, subjects, tasks, steps, events, timetable, travel, evidence, universities, practice, skills, captures, files, loadAll, notify, go, updateProfile, refreshing }
+    return { session: workspaceSession, authSession: session, workspaceOwnerId: dataOwnerId, profile, subjects, tasks, steps, events, timetable, travel, evidence, universities, practice, skills, captures, files, loadAll, notify, go, updateProfile, refreshing }
   }
 }
 
