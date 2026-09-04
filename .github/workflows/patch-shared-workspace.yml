@@ -1,0 +1,26 @@
+name: Patch shared Kellyn workspace
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: ${{ github.event.head_commit.message != 'Wire shared Kellyn workspace into app' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Apply shared workspace patch
+        run: node scripts/patch-shared-workspace.mjs
+      - name: Commit changes
+        run: |
+          git config user.name "dlbeadle78"
+          git config user.email "dlbeadle@icloud.com"
+          git add src/App.jsx src/Phase2Settings.jsx src/Phase3Support.jsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Wire shared Kellyn workspace into app"
+          git push
