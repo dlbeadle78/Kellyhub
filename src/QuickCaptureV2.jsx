@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Camera, CheckCircle2, Clipboard, Download, ExternalLink, File, Image, Link2, Plus, ScanLine, Sparkles, Upload } from 'lucide-react'
 import { supabase } from './supabase.js'
+import CapturePurposeRouter from './CapturePurposeRouter.jsx'
 import './quick-capture.css'
 import './phase2-capture.css'
 
@@ -49,7 +50,7 @@ async function enhanceImage(file){
   }catch{return file}
 }
 
-export default function QuickCaptureV2({session,subjects=[],captures=[],files=[],loadAll,notify}){
+export default function QuickCaptureV2({session,subjects=[],captures=[],files=[],loadAll,notify,go}){
   const [queued,setQueued]=useState([]),[title,setTitle]=useState(''),[subject,setSubject]=useState(''),[note,setNote]=useState('')
   const [busy,setBusy]=useState(false),[drag,setDrag]=useState(false),[enhance,setEnhance]=useState(true),[accepted,setAccepted]=useState(false)
   const [openingFileId,setOpeningFileId]=useState(null)
@@ -121,8 +122,8 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
           <small>Works with Teams in the browser, WJEC pages and other school websites. The extension only captures when Kellyn chooses an action.</small>
         </section>
         <section className="qc-recent">
-          <div className="qc-recent-head"><div><h2>Recent captures</h2><p>Open saved screenshots and files directly from here.</p></div></div>
-          <div className="qc-recent-list">{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div className="qc-recent-body"><strong className="qc-recent-title">{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p className="qc-recent-content">{c.content}</p>}{attached.length>0&&<div className="qc-attachment-actions">{attached.map((file,index)=>{const isImage=(file.mime_type||'').startsWith('image/');return <button type="button" key={file.id||file.storage_path} onClick={()=>openAttachment(file)} disabled={openingFileId===file.id}><ExternalLink size={14}/><span>{openingFileId===file.id?'Opening…':isImage?'View screenshot':attached.length>1?`Open file ${index+1}`:'Open file'}</span></button>})}</div>}</div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</div>
+          <div className="qc-recent-head"><div><h2>Capture inbox</h2><p>Open the original, then choose how Kellyn Hub should use it.</p></div></div>
+          <div className="qc-recent-list">{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div className="qc-recent-body"><strong className="qc-recent-title">{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p className="qc-recent-content">{c.content}</p>}{attached.length>0&&<div className="qc-attachment-actions">{attached.map((file,index)=>{const isImage=(file.mime_type||'').startsWith('image/');return <button type="button" key={file.id||file.storage_path} onClick={()=>openAttachment(file)} disabled={openingFileId===file.id}><ExternalLink size={14}/><span>{openingFileId===file.id?'Opening…':isImage?'View screenshot':attached.length>1?`Open file ${index+1}`:'Open file'}</span></button>})}</div>}<CapturePurposeRouter capture={c} files={files} session={session} notify={notify} loadAll={loadAll} go={go}/></div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</div>
         </section>
       </aside>
     </div>

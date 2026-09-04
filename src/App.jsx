@@ -3,7 +3,7 @@ import {
   Accessibility, BarChart3, BookOpen, Bus, CalendarDays, CheckCircle2, ChevronRight,
   ClipboardList, CloudUpload, GraduationCap, HelpCircle, Home, Lightbulb, LogOut,
   Menu, Mic2, Moon, NotebookTabs, Plus, Search, Settings2, Sparkles, Target,
-  Upload, UserRound, Volume2, X, FileText, University, Brain, ShieldCheck
+  Upload, UserRound, Volume2, X, FileText, University, Brain, ShieldCheck, FolderOpen
 } from 'lucide-react'
 import { supabase } from './supabase.js'
 import LearningSubjectsPage from './LearningSubjects.jsx'
@@ -13,6 +13,7 @@ import QuickCaptureV2 from './QuickCaptureV2.jsx'
 import Phase1Today from './Phase1Today.jsx'
 import StuckV2 from './StuckV2.jsx'
 import Phase2Resources from './Phase2Resources.jsx'
+import Phase4Library from './Phase4Library.jsx'
 import Phase3Progress from './Phase3Progress.jsx'
 import Phase2Settings from './Phase2Settings.jsx'
 import NotificationManager from './NotificationManager.jsx'
@@ -30,6 +31,7 @@ const NAV = [
   ['ucas', 'UCAS', GraduationCap],
   ['uni', 'University', University],
   ['progress', 'My Progress', BarChart3],
+  ['library', 'My Library', FolderOpen],
   ['resources', 'Resources & AI', NotebookTabs],
   ['stuck', "I'm Stuck", HelpCircle],
   ['capture', 'Quick Capture', Plus],
@@ -294,6 +296,7 @@ export default function App() {
         {route==='ucas' && <UcasPage {...common()} />}
         {route==='uni' && <Phase3University {...common()} />}
         {route==='progress' && <Phase3Progress {...common()} />}
+        {route==='library' && <Phase4Library {...common()} />}
         {route==='resources' && <Phase2Resources {...common()} />}
         {route==='stuck' && <StuckV2 {...common()} setSelectedTaskId={setSelectedTaskId} />}
         {route==='capture' && <QuickCaptureV2 {...common()} />}
