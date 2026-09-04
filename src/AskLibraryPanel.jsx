@@ -1,4 +1,4 @@
-import React,{useMemo,useState} from 'react'
+import React,{useEffect,useMemo,useState} from 'react'
 import {BookOpen,ExternalLink,File,Image,LoaderCircle,Search,Sparkles} from 'lucide-react'
 import {supabase} from './supabase.js'
 import {topicLabel,unitLabel} from './libraryKnowledge.js'
@@ -21,6 +21,13 @@ export default function AskLibraryPanel({session,subjects=[],files=[],notify}){
   const [searched,setSearched]=useState(false)
   const [busy,setBusy]=useState(false)
   const [opening,setOpening]=useState(null)
+  const [pendingReviewCount,setPendingReviewCount]=useState(0)
+
+  useEffect(()=>{
+    const uid=session?.user?.id
+    if(!uid)return
+    supabase.from('library_items').select('id',{count:'exact',head:true}).eq('user_id',uid).eq('status','active').eq('extraction_status','needs_review').then(({count})=>setPendingReviewCount(count||0))
+  },[session?.user?.id])
 
   const sources=useMemo(()=>{
     const map=new Map()
@@ -41,6 +48,10 @@ export default function AskLibraryPanel({session,subjects=[],files=[],notify}){
     setBusy(false)
     if(error){setRows([]);return notify?.(error.message)}
     setRows(data||[])
+  }
+
+  function reviewPending(){
+    document.querySelector('.library-list')?.scrollIntoView({behavior:'smooth',block:'start'})
   }
 
   async function openFile(file){
@@ -82,13 +93,14 @@ export default function AskLibraryPanel({session,subjects=[],files=[],notify}){
       <div className="ask-library-icon"><Sparkles/></div>
       <div><span>Ask My Library</span><h3>Study using Kellyn's own saved sources</h3><p>Ask a question and Kellyn Hub finds the most relevant passages in confirmed screenshots, PDFs, handouts and notes. Nothing is sent to ChatGPT unless Kellyn chooses the Study handoff.</p></div>
     </div>
+    {pendingReviewCount>0&&<div className="ask-library-review-note"><BookOpen/><span><strong>{pendingReviewCount} source{pendingReviewCount===1?' is':'s are'} waiting for filing confirmation.</strong><small>Confirm them before Ask My Library treats them as trusted study material.</small></span><button type="button" onClick={reviewPending}>Review sources</button></div>}
     <form className="ask-library-form" onSubmit={ask}>
       <label><span>What do you want to understand?</span><textarea rows="2" value={question} onChange={e=>setQuestion(e.target.value)} placeholder="e.g. Explain labelling theory using my teacher material"/></label>
       <div className="ask-library-controls"><select value={subject} onChange={e=>setSubject(e.target.value)}><option value="all">Search all subjects</option>{subjects.map(s=><option key={s.slug} value={s.slug}>{s.short_name}</option>)}</select><button disabled={busy}><Search/>{busy?'Finding sources…':'Find in my Library'}</button></div>
     </form>
 
     {busy&&<div className="ask-library-loading"><LoaderCircle/><span>Searching confirmed learning material…</span></div>}
-    {!busy&&searched&&sources.length===0&&<div className="ask-library-empty"><BookOpen/><strong>No matching confirmed source yet.</strong><span>Try fewer topic words, change the subject filter, or use Read & organise on more captured material.</span></div>}
+    {!busy&&searched&&sources.length===0&&<div className="ask-library-empty"><BookOpen/><strong>No matching confirmed source yet.</strong><span>{pendingReviewCount>0?`${pendingReviewCount} saved source${pendingReviewCount===1?' still needs':'s still need'} filing confirmation. Review those first, or try fewer topic words.`:'Try fewer topic words, change the subject filter, or use Read & organise on more captured material.'}</span>{pendingReviewCount>0&&<button type="button" onClick={reviewPending}>Review sources waiting below</button>}</div>}
     {!busy&&sources.length>0&&<div className="ask-library-results">
       <div className="ask-library-results-head"><div><strong>{sources.length} useful source{sources.length===1?'':'s'} found</strong><span>Read the evidence first, then continue in Study Mode if useful.</span></div><div><button type="button" className="secondary" onClick={()=>copyStudyPrompt(false)}>Copy Study prompt</button><button type="button" className="study" onClick={()=>copyStudyPrompt(true)}><Sparkles/> Study these sources in ChatGPT</button></div></div>
       <div className="ask-source-list">{sources.map((source,index)=>{
