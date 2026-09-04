@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, CheckCircle2, Clipboard, File, Image, Link2, Plus, ScanLine, Sparkles, Upload } from 'lucide-react'
+import { Camera, CheckCircle2, Clipboard, Download, ExternalLink, File, Image, Link2, Plus, ScanLine, Sparkles, Upload } from 'lucide-react'
 import { supabase } from './supabase.js'
 import './quick-capture.css'
 import './phase2-capture.css'
+
+const EXTENSION_DOWNLOAD='https://github.com/dlbeadle78/Kellyhub/archive/refs/heads/main.zip'
+const EXTENSION_GUIDE='https://github.com/dlbeadle78/Kellyhub/blob/main/chrome-extension/README.md'
 
 function safeFileName(name='file'){return name.replace(/[^a-zA-Z0-9._-]+/g,'-').replace(/-+/g,'-')}
 function fileKind(file){
@@ -54,7 +57,12 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
 
   useEffect(()=>{setAccepted(false)},[title,note,queued.length])
   useEffect(()=>{
-    const hashQuery=location.hash.includes('?')?location.hash.split('?')[1]:'';const params=new URLSearchParams(location.search||hashQuery);const incoming=params.get('text')||params.get('url');const incomingTitle=params.get('title');if(incoming&&!note)setNote(incoming);if(incomingTitle&&!title)setTitle(incomingTitle)
+    const hashQuery=location.hash.includes('?')?location.hash.split('?')[1]:''
+    const params=new URLSearchParams(location.search||hashQuery)
+    const incomingText=params.get('text'),incomingUrl=params.get('url'),incomingTitle=params.get('title')
+    const incoming=[incomingText,incomingUrl?(incomingText?`Source: ${incomingUrl}`:incomingUrl):''].filter(Boolean).join('\n\n')
+    if(incoming&&!note)setNote(incoming)
+    if(incomingTitle&&!title)setTitle(incomingTitle)
   },[])
   useEffect(()=>{const onPaste=e=>{const pasted=Array.from(e.clipboardData?.files||[]);if(pasted.length){e.preventDefault();setQueued(current=>[...current,...pasted]);notify?.('Screenshot added to Quick Capture.')}};window.addEventListener('paste',onPaste);return()=>window.removeEventListener('paste',onPaste)},[])
 
@@ -91,7 +99,16 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
         {(suggestion.subject||suggestion.due||suggestion.type!=='resource')&&<div className={`qc-suggestion ${accepted?'accepted':''}`}><Sparkles/><div><strong>This looks like:</strong><span>{suggestedSubject||'Subject uncertain'} · {suggestion.type.replaceAll('_',' ')}{suggestion.due?` · due ${new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long'}).format(new Date(`${suggestion.due}T12:00:00`))}`:''}</span><small>Confidence {Math.round(suggestion.confidence*100)}%. Check it before saving.</small></div><button type="button" onClick={acceptSuggestion}>{accepted?<><CheckCircle2/> Confirmed</>:<>Use suggestion</>}</button></div>}
         <button className="qc-save" disabled={busy}><Plus/>{busy?'Saving…':'Save capture'}</button><p className="qc-boundary">Classification uses the text, title and file names available in the capture. Image-only documents are not silently guessed. Kellyn can confirm or change the result.</p>
       </form>
-      <section className="qc-recent"><h2>Recent captures</h2>{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div><strong>{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p>{c.content}</p>}{attached.length>0&&<span className="qc-attachments">{attached.length} file{attached.length===1?'':'s'} attached</span>}</div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</section>
+      <aside className="qc-side">
+        <section className="qc-extension">
+          <div className="qc-extension-head"><span className="qc-extension-icon"><Download/></span><div><span>Chrome extension</span><h2>Capture from Teams & websites</h2></div></div>
+          <p>Select a Teams post, teacher instructions, a web page or a useful link and send it straight into Quick Capture. Kellyn reviews everything before it is saved.</p>
+          <div className="qc-extension-actions"><a href={EXTENSION_DOWNLOAD}><Download size={16}/> Download extension</a><a href={EXTENSION_GUIDE} target="_blank" rel="noreferrer">Install guide <ExternalLink size={15}/></a></div>
+          <ol><li>Download and unzip <strong>Kellyhub-main</strong>.</li><li>Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong>.</li><li>Choose <strong>Load unpacked</strong> and select the <code>chrome-extension</code> folder.</li><li>Pin <strong>Add to Kellyn Hub</strong> in Chrome.</li></ol>
+          <small>Works with Teams in the browser, WJEC pages and other school websites. The extension only captures when Kellyn chooses an action.</small>
+        </section>
+        <section className="qc-recent"><h2>Recent captures</h2>{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div><strong>{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p>{c.content}</p>}{attached.length>0&&<span className="qc-attachments">{attached.length} file{attached.length===1?'':'s'} attached</span>}</div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</section>
+      </aside>
     </div>
   </div>
 }
