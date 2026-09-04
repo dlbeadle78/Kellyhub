@@ -10,7 +10,7 @@ function captureSource(c){
   return match?.[1]||null
 }
 function captureText(c){
-  let value=String(c?.content||'').replace(/(?:^|\n)Source:\s*https?:\/\/[^\s]+/ig,'').trim()
+  let value=String(c?.extracted_text||c?.content||'').replace(/(?:^|\n)Source:\s*https?:\/\/[^\s]+/ig,'').trim()
   if(/^https?:\/\/\S+$/i.test(value))value=''
   return value||null
 }
@@ -46,7 +46,7 @@ export default function CapturePurposeRouter({capture,files=[],session,notify,lo
     const {data:item,error:itemError}=await supabase.from('library_items').insert({
       user_id:uid,capture_id:capture.id,subject_slug:subjectSlug,title,purpose,
       resource_type:capture.suggested_type||capture.capture_type||'resource',source_url:sourceUrl,summary,extracted_text:extracted,
-      extraction_status:extracted?'needs_review':'pending',extraction_method:extracted?'captured_text':null,extracted_at:extracted?now:null,
+      extraction_status:extracted?'needs_review':'pending',extraction_method:capture.extraction_method||(extracted?'captured_text':null),extracted_at:extracted?(capture.extracted_at||now):null,
       classification_status:'suggested',suggested_subject_slug:classification.subject_slug,suggested_unit_slug:classification.unit_slug,suggested_topic_slug:classification.topic_slug,tags:classification.tags||[]
     }).select().single()
     if(itemError){setBusy('');return notify?.(itemError.message)}

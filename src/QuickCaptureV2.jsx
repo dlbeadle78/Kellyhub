@@ -4,6 +4,7 @@ import { supabase } from './supabase.js'
 import CapturePurposeRouter from './CapturePurposeRouter.jsx'
 import './quick-capture.css'
 import './phase2-capture.css'
+import './capture-auto-read.css'
 
 const EXTENSION_DOWNLOAD='https://github.com/dlbeadle78/Kellyhub/archive/refs/heads/main.zip'
 const EXTENSION_GUIDE='https://github.com/dlbeadle78/Kellyhub/blob/main/chrome-extension/README.md'
@@ -54,6 +55,7 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
   const [queued,setQueued]=useState([]),[title,setTitle]=useState(''),[subject,setSubject]=useState(''),[note,setNote]=useState('')
   const [busy,setBusy]=useState(false),[drag,setDrag]=useState(false),[enhance,setEnhance]=useState(true),[accepted,setAccepted]=useState(false)
   const [openingFileId,setOpeningFileId]=useState(null)
+  const [readProgress,setReadProgress]=useState('')
   const inputRef=useRef(null),cameraRef=useRef(null)
   const suggestion=useMemo(()=>classify(title,note,queued),[title,note,queued])
 
@@ -85,18 +87,39 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
   }
 
   async function save(e){
-    e.preventDefault();if(!queued.length&&!note.trim())return notify?.('Add a note, link, screenshot or file first.');setBusy(true)
-    const isUrl=!queued.length&&/^https?:\/\//i.test(note.trim());const captureType=queued.length?(queued.every(f=>(f.type||'').startsWith('image/'))?'image':'file'):(isUrl?'link':'text')
+    e.preventDefault()
+    if(!queued.length&&!note.trim())return notify?.('Add a note, link, screenshot or file first.')
+    setBusy(true);setReadProgress('')
+    const isUrl=!queued.length&&/^https?:\/\//i.test(note.trim())
+    const captureType=queued.length?(queued.every(f=>(f.type||'').startsWith('image/'))?'image':'file'):(isUrl?'link':'text')
+    let readResult={text:'',method:null,pageCount:null,note:null}
+    if(queued.length){
+      try{
+        setReadProgress('Reading the capture…')
+        const {readCaptureFiles}=await import('./captureAutoRead.js')
+        readResult=await readCaptureFiles(queued,label=>setReadProgress(label))
+      }catch(error){readResult={text:'',method:null,pageCount:null,note:error?.message||'Automatic reading failed.'}}
+    } else if(!isUrl&&note.trim()){readResult={text:note.trim(),method:'captured_text',pageCount:null,note:null}}
+    const classificationText=[note.trim(),readResult.text].filter(Boolean).join('\n\n')
+    const finalSuggestion=classify(title,classificationText,queued)
     const finalSubject=subject||null
-    const {data:capture,error:captureError}=await supabase.from('quick_capture').insert({user_id:session.user.id,capture_type:captureType,title:title.trim()||null,content:isUrl?null:(note.trim()||null),source_url:isUrl?note.trim():null,subject_slug:finalSubject,processed:accepted,suggested_subject_slug:suggestion.subject,suggested_type:suggestion.type,suggested_due_date:suggestion.due,classification_confidence:suggestion.confidence}).select().single()
-    if(captureError){setBusy(false);return notify?.(captureError.message)}
+    const extracted=readResult.text||null
+    const extractionStatus=extracted?'needs_review':queued.length?'failed':isUrl?'pending':'ready'
+    setReadProgress(extracted?'Saving extracted text…':'Saving capture…')
+    const {data:capture,error:captureError}=await supabase.from('quick_capture').insert({
+      user_id:session.user.id,capture_type:captureType,title:title.trim()||null,content:isUrl?null:(note.trim()||null),source_url:isUrl?note.trim():null,subject_slug:finalSubject,processed:accepted,
+      suggested_subject_slug:finalSuggestion.subject,suggested_type:finalSuggestion.type,suggested_due_date:finalSuggestion.due,classification_confidence:finalSuggestion.confidence,
+      extracted_text:extracted,extraction_status:extractionStatus,extraction_method:readResult.method,extracted_at:extracted?new Date().toISOString():null,extraction_note:readResult.note
+    }).select().single()
+    if(captureError){setBusy(false);setReadProgress('');return notify?.(captureError.message)}
     for(let i=0;i<queued.length;i++){
       const original=queued[i],file=enhance?await enhanceImage(original):original
-      const path=`${session.user.id}/captures/${capture.id}/${String(i+1).padStart(2,'0')}-${Date.now()}-${safeFileName(file.name)}`
+      const path=session.user.id+'/captures/'+capture.id+'/'+String(i+1).padStart(2,'0')+'-'+Date.now()+'-'+safeFileName(file.name)
       const {error:storageError}=await supabase.storage.from('user-files').upload(path,file,{upsert:false});if(storageError){notify?.(storageError.message);continue}
-      const {error:fileError}=await supabase.from('user_files').insert({user_id:session.user.id,capture_id:capture.id,subject_slug:finalSubject,storage_path:path,original_name:original.name,mime_type:file.type,size_bytes:file.size,file_type:suggestion.type==='teacher_feedback'?'teacher_feedback':fileKind(original)});if(fileError)notify?.(fileError.message)
+      const {error:fileError}=await supabase.from('user_files').insert({user_id:session.user.id,capture_id:capture.id,subject_slug:finalSubject,storage_path:path,original_name:original.name,mime_type:file.type,size_bytes:file.size,file_type:finalSuggestion.type==='teacher_feedback'?'teacher_feedback':fileKind(original)});if(fileError)notify?.(fileError.message)
     }
-    setBusy(false);setQueued([]);setTitle('');setSubject('');setNote('');setAccepted(false);await loadAll();notify?.(accepted?'Captured and classified.':'Captured. The original is safely stored.')
+    setBusy(false);setReadProgress('');setQueued([]);setTitle('');setSubject('');setNote('');setAccepted(false);await loadAll()
+    notify?.(extracted?'Captured and text extracted. Choose how Kellyn Hub should use it.':readResult.note?'Captured, but text could not be extracted. The original is still safely stored.':accepted?'Captured and classified.':'Captured. The original is safely stored.')
   }
 
   const recent=captures.slice(0,8),suggestedSubject=subjects.find(s=>s.slug===suggestion.subject)?.short_name
@@ -111,7 +134,7 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
         <label>Quick note, teacher instruction or web link<textarea rows="4" value={note} onChange={e=>setNote(e.target.value)} placeholder="Paste the task wording if you have it. This helps the Hub recognise subject, type and deadline."/></label>
         <div className="qc-fields"><label>Short title <span>optional</span><input value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. History source task"/></label><label>Subject <span>optional</span><select value={subject} onChange={e=>setSubject(e.target.value)}><option value="">Let Hub suggest</option>{subjects.map(s=><option value={s.slug} key={s.slug}>{s.short_name}</option>)}</select></label></div>
         {(suggestion.subject||suggestion.due||suggestion.type!=='resource')&&<div className={`qc-suggestion ${accepted?'accepted':''}`}><Sparkles/><div><strong>This looks like:</strong><span>{suggestedSubject||'Subject uncertain'} · {suggestion.type.replaceAll('_',' ')}{suggestion.due?` · due ${new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'long'}).format(new Date(`${suggestion.due}T12:00:00`))}`:''}</span><small>Confidence {Math.round(suggestion.confidence*100)}%. Check it before saving.</small></div><button type="button" onClick={acceptSuggestion}>{accepted?<><CheckCircle2/> Confirmed</>:<>Use suggestion</>}</button></div>}
-        <button className="qc-save" disabled={busy}><Plus/>{busy?'Saving…':'Save capture'}</button><p className="qc-boundary">Classification uses the text, title and file names available in the capture. Image-only documents are not silently guessed. Kellyn can confirm or change the result.</p>
+        {busy&&readProgress&&<div className="qc-auto-read"><ScanLine/><span><strong>Reading this capture</strong>{readProgress}</span></div>}<button className="qc-save" disabled={busy}><Plus/>{busy?'Working…':'Save capture'}</button><p className="qc-boundary">Screenshots, images and PDFs are read automatically when saved. Kellyn Hub keeps the original, stores the extracted text separately, and still asks Kellyn to confirm how the material should be used and filed.</p>
       </form>
       <aside className="qc-side">
         <section className="qc-extension">
@@ -123,7 +146,7 @@ export default function QuickCaptureV2({session,subjects=[],captures=[],files=[]
         </section>
         <section className="qc-recent">
           <div className="qc-recent-head"><div><h2>Capture inbox</h2><p>Open the original, then choose how Kellyn Hub should use it.</p></div></div>
-          <div className="qc-recent-list">{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div className="qc-recent-body"><strong className="qc-recent-title">{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p className="qc-recent-content">{c.content}</p>}{attached.length>0&&<div className="qc-attachment-actions">{attached.map((file,index)=>{const isImage=(file.mime_type||'').startsWith('image/');return <button type="button" key={file.id||file.storage_path} onClick={()=>openAttachment(file)} disabled={openingFileId===file.id}><ExternalLink size={14}/><span>{openingFileId===file.id?'Opening…':isImage?'View screenshot':attached.length>1?`Open file ${index+1}`:'Open file'}</span></button>})}</div>}<CapturePurposeRouter capture={c} files={files} session={session} notify={notify} loadAll={loadAll} go={go}/></div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</div>
+          <div className="qc-recent-list">{recent.map(c=>{const attached=files.filter(f=>f.capture_id===c.id);return <article key={c.id}><span className="qc-kind">{c.capture_type==='link'?<Link2/>:c.capture_type==='image'?<Image/>:<File/>}</span><div className="qc-recent-body"><strong className="qc-recent-title">{c.title||c.source_url||attached[0]?.original_name||'Quick capture'}</strong><small>{c.subject_slug||c.suggested_subject_slug||'Unsorted'} · {new Intl.DateTimeFormat('en-GB',{day:'numeric',month:'short'}).format(new Date(c.created_at))}</small>{c.content&&<p className="qc-recent-content">{c.content}</p>}{c.extracted_text&&<div className="qc-read-result"><strong>Text read from capture</strong><p>{c.extracted_text.slice(0,700)}{c.extracted_text.length>700?'…':''}</p></div>}{c.extraction_status==='failed'&&<p className="qc-read-failed">The original was saved, but text could not be read automatically. It can be retried from My Library.</p>}{attached.length>0&&<div className="qc-attachment-actions">{attached.map((file,index)=>{const isImage=(file.mime_type||'').startsWith('image/');return <button type="button" key={file.id||file.storage_path} onClick={()=>openAttachment(file)} disabled={openingFileId===file.id}><ExternalLink size={14}/><span>{openingFileId===file.id?'Opening…':isImage?'View screenshot':attached.length>1?`Open file ${index+1}`:'Open file'}</span></button>})}</div>}<CapturePurposeRouter capture={c} files={files} session={session} notify={notify} loadAll={loadAll} go={go}/></div></article>})}{!recent.length&&<div className="qc-empty">Nothing captured yet.</div>}</div>
         </section>
       </aside>
     </div>
