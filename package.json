@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "test:safety": "node scripts/safety-regression.mjs",
-    "build": "npm run test:safety && vite build",
+    "test:learning": "node scripts/learning-quality-regression.mjs",
+    "build": "npm run test:safety && npm run test:learning && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
