@@ -1,0 +1,26 @@
+name: Activate layered learning upgrade
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: ${{ github.event.head_commit.message != 'Activate calm layered learning experience' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Activate new learning experience
+        run: node scripts/activate-learning-v2.mjs
+      - name: Commit changes
+        run: |
+          git config user.name "dlbeadle78"
+          git config user.email "dlbeadle@icloud.com"
+          git add src/App.jsx src/LearningSubjectsV2.jsx
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Activate calm layered learning experience"
+          git push
