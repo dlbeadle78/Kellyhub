@@ -230,7 +230,7 @@ export default function LearningSubjectsV2({session,subjects=[],tasks=[],practic
           <aside className="lv2-aside">
             <section><span>Key takeaway</span><p>{activeSection?.takeaway||activeSection?.example?.demonstrates||topic.summary}</p></section>
             <section><span>Check your understanding</span><p>{topic.recall?.[0]?.[0]||depth?.analysis?.[0]||'Can you explain the main idea without rereading it?'}</p></section>
-            <section className="lv2-confidence"><span>How secure is this topic?</span><div><button disabled={busyStatus} className={currentStatus==='needs_review'?'active review':''} onClick={()=>setStatus('needs_review')}>Need another look</button><button disabled={busyStatus} className={['developing','getting_there'].includes(currentStatus)?'active developing':''} onClick={()=>setStatus('developing')}>Getting there</button><button disabled={busyStatus} className={currentStatus==='confident'?'active confident':''} onClick={()=>setStatus('confident')}>Confident</button></div></section>
+            <section className="lv2-confidence"><span>How secure is this topic?</span><div><button disabled={busyStatus} className={currentStatus==='needs_review'?'active review':''} onClick={()=>setStatus('needs_review')}>Need another look</button><button disabled={busyStatus} className={['developing','getting_there'].includes(currentStatus)?'active developing':''} onClick={()=>setStatus('getting_there')}>Getting there</button><button disabled={busyStatus} className={currentStatus==='confident'?'active confident':''} onClick={()=>setStatus('confident')}>Confident</button></div></section>
           </aside>
         </div>}
 

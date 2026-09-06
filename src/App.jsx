@@ -6,7 +6,7 @@ import {
   Upload, UserRound, Volume2, X, FileText, University, Brain, ShieldCheck, FolderOpen
 } from 'lucide-react'
 import { supabase } from './supabase.js'
-import LearningSubjectsPage from './LearningSubjects.jsx'
+import LearningSubjectsPage from './LearningSubjectsV2.jsx'
 import SpeechControls from './SpeechControls.jsx'
 import Phase1Work from './Phase1Work.jsx'
 import QuickCaptureV2 from './QuickCaptureV2.jsx'
@@ -287,7 +287,7 @@ export default function App() {
         <div className="top-actions">
           <button title="Text size" onClick={()=>updateProfile({ text_scale: profile?.text_scale >= 1.2 ? 1 : Number(((profile?.text_scale || 1)+0.1).toFixed(1)) })}><span className="aa">A<span>A</span></span><small>Text size</small></button>
           <button title={profile?.dyslexic_font ? 'Turn OpenDyslexic off' : 'Turn OpenDyslexic on'} aria-pressed={Boolean(profile?.dyslexic_font)} onClick={()=>updateProfile({ dyslexic_font: !profile?.dyslexic_font })}><span aria-hidden="true" style={{fontWeight:900,fontSize:'1.05rem',letterSpacing:'-0.04em',lineHeight:1}}>Aa</span><small>OpenDyslexic {profile?.dyslexic_font ? 'On' : 'Off'}</small></button>
-          <SpeechControls compact getText={()=>mainRef.current?.innerText || ''} label="Read aloud" />
+          {route!=='subjects' && <SpeechControls compact getText={()=>mainRef.current?.innerText || ''} contentKey={`route:${route}`} label="Read aloud" />}
           <button title="Focus mode" onClick={()=>document.body.classList.toggle('focus-app')}><Target/><small>Focus mode</small></button>
           <button title="Dark mode" onClick={()=>updateProfile({ dark_mode: !profile?.dark_mode })}><Moon/><small>Dark mode</small></button>
         </div>
