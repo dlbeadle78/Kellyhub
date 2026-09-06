@@ -1,7 +1,8 @@
 const DIRECT_COMPLETION_PATTERNS = [
   /\b(write|do|complete|finish|answer|solve)\b.{0,55}\b(my|this|the)\b.{0,55}\b(homework|assignment|coursework|assessment|schoolwork|worksheet|nea|individual project|task)\b/i,
   /\bwrite\s+(?:me\s+)?(?:an?\s+|the\s+|my\s+)?(?:essay|paragraph|introduction|conclusion|response|answer)\b/i,
-  /\banswer\s+(?:question|q)\s*\d+/i,
+  /\banswer\s+(?:question|q)\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i,
+  /\banswer\b.{0,35}\b(?:this|the|my)?\s*(?:question|worksheet|task)\b.{0,35}\bfor\s+me\b/i,
   /\bgive\s+me\s+(?:the\s+)?answer\b/i,
   /\brewrite\b.{0,65}\b(submit|submission|assignment|coursework|homework|assessment|schoolwork|answer|essay|paragraph|project)\b/i,
   /\b(make|turn)\b.{0,35}\b(this|my)\b.{0,35}\b(submission[- ]ready|ready\s+to\s+submit|sound\s+like\s+me)\b/i,
