@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "test:safety": "node scripts/safety-regression.mjs",
+    "build": "npm run test:safety && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
