@@ -1,4 +1,5 @@
 import {LEARNING_CONTENT as BASE_LEARNING_CONTENT} from './learningContentLegacy.js'
+export {LEARNING_STATUS} from './learningContentLegacy.js'
 
 const lawBase = BASE_LEARNING_CONTENT.law
 const lawUnits = (lawBase?.units || []).map(unit => {
