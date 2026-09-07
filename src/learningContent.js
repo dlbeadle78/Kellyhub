@@ -21,6 +21,29 @@ const sociologyUnits = (sociologyBase?.units || []).map(unit => {
   return unit
 })
 
+const historyBase = BASE_LEARNING_CONTENT.history
+const historyUnits = (historyBase?.units || []).map(unit => {
+  if (unit.slug === 'unit-3-option-8') {
+    return {
+      ...unit,
+      subtitle: 'Kellyn’s confirmed breadth study. Compare change, continuity and turning points across Civil Rights and the Making of a Superpower from c.1890 to 1990.'
+    }
+  }
+  if (unit.slug === 'unit-4-option-3') {
+    return {
+      ...unit,
+      subtitle: 'Kellyn’s confirmed depth study. Use precise Welsh and British evidence, then evaluate primary sources through content, context and provenance.'
+    }
+  }
+  if (unit.slug === 'unit-5-nea') {
+    return {
+      ...unit,
+      subtitle: 'Historical interpretations and independent enquiry. The Hub supports research method and organisation without writing assessed work.'
+    }
+  }
+  return unit
+})
+
 const lawBase = BASE_LEARNING_CONTENT.law
 const lawUnits = (lawBase?.units || []).map(unit => {
   if (unit.slug !== 'unit-3-4-substantive-law') return unit
@@ -38,6 +61,11 @@ export const LEARNING_CONTENT = {
     ...sociologyBase,
     intro: 'Kellyn’s Year 13 Sociology route is Unit 3 Crime and Deviance plus Unit 4 Social Inequality and Applied Methods. Learn each idea with named sociologists, specific studies, current official evidence and Welsh real-world examples, then practise explaining what the evidence supports, challenges or cannot prove.',
     units: sociologyUnits
+  },
+  history: {
+    ...historyBase,
+    intro: 'Kellyn’s Year 13 History route is Unit 3 Option 8 The American Century, Unit 4 Option 3 Protest and Campaigns for Social Reform, and Unit 5 Historical Interpretations. Learn through chronology, turning points, primary evidence and short quotations, always asking what each example proves, what it cannot prove and what it should be compared with.',
+    units: historyUnits
   },
   law: {
     ...lawBase,
